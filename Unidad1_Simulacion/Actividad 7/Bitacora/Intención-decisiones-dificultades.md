@@ -22,6 +22,9 @@ El encargo pide que la incertidumbre no se vea como caos random, sino como regla
 
 <video src="20260724-1814-02.8761737-1.mp4" controls width="100%" title="Title"></video>
 
+[Title](20260724-1814-02.8761737-1.mp4)
+
+
 <video src="20260724-1837-46.1395947.mp4" controls width="100%" title="Title"></video>
 
 # Decisiones tomadas y alternativas descartadas:
