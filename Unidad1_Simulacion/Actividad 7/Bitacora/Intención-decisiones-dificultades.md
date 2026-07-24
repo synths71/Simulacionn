@@ -1,6 +1,8 @@
 # Intro:
 
-El festival gira en torno a combate de aviación, una pelea en el aire de la era de la segunda guerra mundial son dos aviones o objetos en este caso que giran entre si pero uno de los dos siempre va a ser el que persigue y otro que intenta huir o pelear pero para el contexto del festival va solo a huir.
+El festival gira en torno a combate de aviación, una pelea en el aire de la era de la segunda guerra mundial son dos aviones o objetos en este caso que giran entre si pero uno de los dos siempre va a ser el que persigue y otro que intenta huir o pelear pero para el contexto del festival va solo a huir. 
+
+Las dos bolitas siempre van a estar cerquita entre si tal como aviones en una pelea mientras una siempre intenta estar atras o generalmente persiguiendo la otra bolita.
 
 El encargo pide que la incertidumbre no se vea como caos random, sino como reglas distintas que producen comportamientos distintos, yo pense en la solución con las 2 bolitas, una que el visitante puede influenciar y otra que persigue a la primera bolita sin descanso ni influencia de la persona y no son 2 sketches sino que es uno solo con 2 elementos iguales pero que tienen un comportamiento distinto y hacen una sola pieza.
 
