@@ -1,5 +1,7 @@
 # Intro:
 
+El festival gira en torno a combate de aviación, una pelea en el aire de la era de la segunda guerra mundial son dos aviones o objetos en este caso que giran entre si pero uno de los dos siempre va a ser el que persigue y otro que intenta huir o pelear pero para el contexto del festival va solo a huir.
+
 El encargo pide que la incertidumbre no se vea como caos random, sino como reglas distintas que producen comportamientos distintos, yo pense en la solución con las 2 bolitas, una que el visitante puede influenciar y otra que persigue a la primera bolita sin descanso ni influencia de la persona y no son 2 sketches sino que es uno solo con 2 elementos iguales pero que tienen un comportamiento distinto y hacen una sola pieza.
 
 # 5 momentos:
@@ -34,4 +36,30 @@ Se me dificulto un poco conseguir un resultado como tal, aveces salían errores 
 
 # Uso dado a la IA generativa y cambios realizados sobre sus propuestas: 
 
-La IA generalmente la use para poder escribir el codigo 
+La IA generalmente la use para poder escribir el codigo
+
+
+https://editor.p5js.org/synths71/sketches/_Rm4G6dcp
+
+
+# Autoevaluación: 
+
+1. Encargo completo: interpreto los cinco momentos dentro de un mismo sistema visual. 
+
+**Cumplo**
+
+2. Simulación con intención: utilizo al menos tres conceptos de la unidad para comunicar las ideas del encargo.
+
+**cumplo**
+
+3. Interacción significativa: la interacción modifica el comportamiento o las probabilidades del sistema, que también funciona sin intervención. 
+
+**cumplo**
+
+4. Prototipo funcional: la experiencia puede ejecutarse y recorrerse completa sin errores que impidan comprenderla.
+
+**cumplo**
+
+5. Proceso documentado: la bitácora evidencia avances, decisiones, dificultades, soluciones, uso de IA y enlace al prototipo. 
+
+**cumplo**
