@@ -20,9 +20,9 @@ El encargo pide que la incertidumbre no se vea como caos random, sino como regla
 
 # Versiones: 
 
-<video controls src="20260724-1814-02.8761737-1.mp4" title="Title"></video>
+<video src="20260724-1814-02.8761737-1.mp4" controls width="100%" title="Title"></video>
 
-<video controls src="20260724-1837-46.1395947.mp4" title="Title"></video>
+<video src="20260724-1837-46.1395947.mp4" controls width="100%" title="Title"></video>
 
 # Decisiones tomadas y alternativas descartadas:
 
