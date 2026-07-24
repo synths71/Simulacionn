@@ -10,11 +10,11 @@ El encargo pide que la incertidumbre no se vea como caos random, sino como regla
 
 **Tendencia**: Cada vez que dejas presionado el dedo o el clic, se va sumando un pequeño empujón a la dirección del movimiento. Al principio casi no cambia nada, pero con el tiempo esos empujoncitos se acumulan y terminan cambiando hacia dónde va. La idea es que una acción pequeña, repetida muchas veces, termina haciendo la diferencia. Es por eso que si uno deja el click presionado pues se pone a toda marcha ya que no dejas de meter influencia.
 
-**Normalidad**: La bolita cuando no se esta presionando click esta en una gaussiana, va en un recorrido aleatorio y lo mismo cuando ya hay click, solo intenta huir del click de la persona de manera no predecible pero igual sigue como una distancia habitual, no salta de un lado de la pantalla a otra.
+**Normalidad**: La bolita roja siempre se va a comportar diferente y de la misma manera, siempre va a intentar perseguir la bolita azul, no importa que tanto se aleje y también tiene las mismas habilidades de la azul como los salto y la aceleración por el click de la persona.
 
 **Excepción**: De vez en cuando, con muy baja probabilidad, se dispara un salto tipo Lévy flight, la bolita se desplaza por una corta distancia mucho más rapido de lo normal y no se ve como si se teletransportara sino que si recorre la distancia y deja el recorrido en las particulas que de por si dejan las bolitas como un rastro.
 
-**Influencia**: La persona directamente no mueve nada en el programa, solo cambia el punto de referencia que el sistema usa para calcular el sesgo, la desviación que va a tomar y la probabilidad de que haga una excepción y también cuando más cerca este más probabilidad haya de que haga un salto de excepción. el sistema reacciona a tu presencia sin que vos controles el resultado exacto.
+**Influencia**: La persona directamente no mueve nada en el programa, solo cambia el punto de referencia que el sistema usa para calcular el sesgo, la desviación que va a tomar y la probabilidad de que haga una excepción y también cuando más cerca este más probabilidad haya de que haga un salto de excepción. el sistema reacciona a la de uno presencia sin que uno controle el resultado exacto.
 
 # Versiones: 
 
@@ -36,8 +36,10 @@ Se me dificulto un poco conseguir un resultado como tal, aveces salían errores 
 
 # Uso dado a la IA generativa y cambios realizados sobre sus propuestas: 
 
-La IA generalmente la use para poder escribir el codigo
+La IA generalmente la use para poder escribir el codigo y hacer cambios de como funciona la aplicación, al inicio también le pregunte que haría ella en el proyecto pero solo como en ideas para yo ver si habia algo interesante de lo que podría empezar a modificar con el contexto del festival y ya con mis ideas de como visualizaba el reto.
 
+
+# Aplicación en p5js:
 
 https://editor.p5js.org/synths71/sketches/_Rm4G6dcp
 
