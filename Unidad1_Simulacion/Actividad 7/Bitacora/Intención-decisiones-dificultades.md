@@ -70,3 +70,9 @@ https://editor.p5js.org/synths71/sketches/_Rm4G6dcp
 5. Proceso documentado: la bitácora evidencia avances, decisiones, dificultades, soluciones, uso de IA y enlace al prototipo. 
 
 **cumplo**
+
+
+
+
+
+
