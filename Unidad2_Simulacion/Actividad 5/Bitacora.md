@@ -103,14 +103,15 @@ Los resistentes morian más rapido que los mismos sanos, esto porque tenían una
 
 | Criterio | Peso | Valoración | Aporte |
 |---|---|---|---|
-| La intención es clara y perceptible en el comportamiento. | 20% | | |
-| Los tipos, cantidades, matriz y parámetros están justificados desde la intención. | 25% | | |
-| Comprendo y puedo modificar el funcionamiento técnico del sistema. | 20% | | |
-| El sistema produce variaciones con una identidad reconocible. | 15% | | |
-| Experimenté, comparé, seleccioné y descarté con criterios claros. | 10% | | |
-| Puedo distinguir y sustentar lo diseñado y lo emergente. | 10% | | |
-| **Total** | **100%** | | |
+| La intención es clara y perceptible en el comportamiento. | 20% |90% |18.00 |
+| Los tipos, cantidades, matriz y parámetros están justificados desde la intención. | 25% |85% |21.25 |
+| Comprendo y puedo modificar el funcionamiento técnico del sistema. | 20% |90% | 18.00|
+| El sistema produce variaciones con una identidad reconocible. | 15% | 85%| 12.75|
+| Experimenté, comparé, seleccioné y descarté con criterios claros. | 10% |80% | 8.00|
+| Puedo distinguir y sustentar lo diseñado y lo emergente. | 10% |80% | 8.00|
+| **Total** | **100%** |100% |86 |
 
+## Nota propuesta: 4.3
 
 # Aplicación en p5js:
 https://editor.p5js.org/synths71/sketches/5SxGz3cGp
