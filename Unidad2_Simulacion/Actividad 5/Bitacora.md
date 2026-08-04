@@ -94,12 +94,11 @@ Los resistentes morian más rapido que los mismos sanos, esto porque tenían una
 
 # Varias manifestaciones del sistema: 
 
-<video controls src="Grabación 2026-08-04 114004.mp4" title="Title"></video>
+![alt text](<Grabación 2026-08-04 114004.gif>)
 
-<video controls src="Grabación 2026-08-04 114632.mp4" title="Title"></video>
+![alt text](<Grabación 2026-08-04 115530.gif>)
 
-<video controls src="Grabación 2026-08-04 115530.mp4" title="Title"></video>
-
+![alt text](<Grabación 2026-08-04 114632.gif>)
 # Autoevaluación: 
 
 | Criterio | Peso | Valoración | Aporte |
