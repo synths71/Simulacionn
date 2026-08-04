@@ -30,7 +30,9 @@ Seleccioné una minoría de Resistentes porque quiero hacer perceptible que la r
 | **Sano** | indiferencia | repulsión débil, corto alcance (huye tarde y de cerca) | indiferencia |
 | **Resistente** | indiferencia | repulsión fuerte, alcance grande (detecta y evade desde lejos) | indiferencia |
 
-falta
+Seleccioné que Infectado→Sano tenga mucho más alcance que Sano→Infectado porque quiero hacer perceptible que el contagio "busca" activamente mientras la amenaza se detecta tarde. Espero que esto produzca la sensación de inevitabilidad para la mayoría de la población.
+
+En cambio, seleccioné que Resistente→Infectado tenga mayor alcance y fuerza que cualquier otra relación de evasión porque quiero hacer perceptible que ahí vive la "resistencia individual". Pero esta relación no es absoluta: si un Resistente queda rodeado por varios Infectados a la vez, las fuerzas de evasión se cancelan entre sí y el Resistente puede caer igual — la resistencia compra probabilidad de escape, no garantía.
 
 ## Intensidad y alcance de cada relación: 
 
@@ -80,16 +82,37 @@ Seleccione estos parametros porque quiero hacer perceptible que las particulas, 
 
 La interacción disponible de momento es que se puede reiniciar el brote con uno nuevo en cierto lugar por si el anterior se quedo estancado en el sistema.
 
+# Registro de pruebas (ajustes, hallazgos y descartes):
+
+- Hallazgo 1: 
+
+Los Infectados formaban bolas y no se separaban entonces reducia la cantidad de infectados que producian, la idea es que quede como un enjambre. El ajuste fue que se cambió Infectado→Infectado de atracción a repulsión suave y de corto alcance.
+
+- Hallazgo 2: 
+
+Los resistentes morian más rapido que los mismos sanos, esto porque tenían una velocidad maxima menor que la de los infectados entonces incluso si corrían pues eran alcanzados facilmente, el ajuste es que se le subio la velocidad maxima a los resistentes para que tuvieran mejores chances de sobrevivir. 
+
+# Varias manifestaciones del sistema: 
+
+<video controls src="Grabación 2026-08-04 114004.mp4" title="Title"></video>
+
+<video controls src="Grabación 2026-08-04 114632.mp4" title="Title"></video>
+
+<video controls src="Grabación 2026-08-04 115530.mp4" title="Title"></video>
+
+# Autoevaluación: 
+
+| Criterio | Peso | Valoración | Aporte |
+|---|---|---|---|
+| La intención es clara y perceptible en el comportamiento. | 20% | | |
+| Los tipos, cantidades, matriz y parámetros están justificados desde la intención. | 25% | | |
+| Comprendo y puedo modificar el funcionamiento técnico del sistema. | 20% | | |
+| El sistema produce variaciones con una identidad reconocible. | 15% | | |
+| Experimenté, comparé, seleccioné y descarté con criterios claros. | 10% | | |
+| Puedo distinguir y sustentar lo diseñado y lo emergente. | 10% | | |
+| **Total** | **100%** | | |
 
 
-
-
-
-
-
-
-
-
-
+# Aplicación en p5js:
 https://editor.p5js.org/synths71/sketches/5SxGz3cGp
  
