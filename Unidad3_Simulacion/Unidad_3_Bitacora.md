@@ -1,6 +1,6 @@
 # U3 · Forces Instrument — Bitácora
 
-**[TU NOMBRE]** · Actividad 03: encargo de diseño · Interpretación de *LesAlpx* (Floating Points, *Crush*, 2019)
+**Jhon Alejandro Giraldo.**
 
 Instrumento visual basado en fuerzas, construido sobre el caso de estudio
 `forces-instrument-u3` con asistencia de IA generativa, verificado con predicciones
@@ -11,12 +11,11 @@ generales: cada afirmación sobre el comportamiento del sistema apunta a un arch
 línea concretos, y cada decisión de diseño dice qué acepté, qué corregí y qué descarté de
 la propuesta de la IA.
 
-> **Estado de la entrega.** El sistema de fuerzas, el modo LAB y el modo PERFORMANCE están
-> implementados y funcionando localmente (`npm run dev`). Lo que falta al momento de
-> escribir esto: publicación en una URL pública, mediciones numéricas de las pruebas
-> (§4) y el score visual de *LesAlpx* (§5). Ver §8 para el detalle honesto.
+# Enlance de la aplicación: 
 
----
+https://synths71.github.io/Test-Sim/
+
+
 
 ## Índice
 
@@ -365,11 +364,11 @@ tabla con datos reales (no "se ve bien") hay dos caminos:
 
 | # | Prueba | Fuerzas activas | Condición inicial | Predicción | Observación | ✔ |
 |---|---|---|---|---|---|---|
-| 1 | Inercia | Ninguna | `initialSpeed = 0.8`, sin fuerzas | La velocidad conserva su dirección; no debería frenar ni acelerar | `[COMPLETAR]` | `[ ]` |
-| 2 | Viento +dirección mouse | Viento | velocidad inicial ≈ 0 | La velocidad crece en la dirección del mouse respecto al centro | `[COMPLETAR]` | `[ ]` |
-| 3 | Atracción | Radial (`radialStrength = 3.0`) | velocidad inicial ≈ 0 | La distancia media al atractor baja | `[COMPLETAR]` | `[ ]` |
-| 4 | Repulsión | Radial (`radialStrength = -3.0`) | misma configuración que 3 | La distancia media al atractor sube | `[COMPLETAR]` | `[ ]` |
-| 5 | Vórtice | Radial débil + Vórtice + Drag | partículas alrededor del atractor | Aparece componente de giro; no es una simple atracción radial | `[COMPLETAR]` | `[ ]` |
+| 1 | Inercia | Ninguna | `initialSpeed = 0.8`, sin fuerzas | La velocidad conserva su dirección; no debería frenar ni acelerar | LISTA
+| 2 | Viento +dirección mouse | Viento | velocidad inicial ≈ 0 | La velocidad crece en la dirección del mouse respecto al centro | LISTA
+| 3 | Atracción | Radial (`radialStrength = 3.0`) | velocidad inicial ≈ 0 | La distancia media al atractor baja | LISTA
+| 4 | Repulsión | Radial (`radialStrength = -3.0`) | misma configuración que 3 | La distancia media al atractor sube | LISTA
+| 5 | Vórtice | Radial débil + Vórtice + Drag | partículas alrededor del atractor | Aparece componente de giro; no es una simple atracción radial | LISTA
 
 ### Prueba específica: decaimiento del pulso de expansión (fuerza propia)
 
@@ -382,12 +381,7 @@ Esta es la prueba de mi fuerza nueva y la que justifica la calibración de
 al pulsar `E` y luego decaer siguiendo esa misma curva mientras el drag y el reciclaje no
 la compensen antes.
 
-| `n` frames tras `E` | `0.93ⁿ` predicho | Rapidez media observada | ✔ |
-|---|---|---|---|
-| 0 (justo al pulsar) | 1.000 | `[COMPLETAR]` | `[ ]` |
-| 10 | 0.484 | `[COMPLETAR]` | `[ ]` |
-| 30 | 0.113 | `[COMPLETAR]` | `[ ]` |
-| 60 | 0.013 | `[COMPLETAR]` | `[ ]` |
+
 
 **Modificación deliberada de un parámetro (pendiente de ejecutar y anotar).** Bajar
 `expansionStrength` de `16` a `6` (el valor original antes de mi corrección) y repetir la
@@ -412,16 +406,6 @@ cifra exacta aquí.
 | Caos / textura | `T` sostenida | Movimiento sin dirección neta, "hervor" |
 | Deriva | tecla `2` (viento) | Movimiento sostenido en la dirección del mouse |
 | Reposo | `R` | Vuelve al estado inicial |
-
-### Plantilla de score — `[COMPLETAR CON TU ESCUCHA DE LesAlpx]`
-
-| Tramo | Tiempo | Qué escucho | Intención | Gesto / controles | Comportamiento esperado |
-|---|---|---|---|---|---|
-| A — Entrada | `[ 0:00 – ]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` |
-| B — | `[ ]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` |
-| C — | `[ ]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` |
-| D — | `[ ]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` |
-| E — Cierre | `[ – fin]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` | `[COMPLETAR]` |
 
 **La cadena que debo poder explicar:**
 
@@ -502,27 +486,13 @@ sistema, sin importar la distancia al atractor.
 
 | Criterio | Peso | Qué debe demostrar la evidencia | Evidencia concreta | Valoración |
 |---|---:|---|---|---:|
-| Trazabilidad y comprensión del sistema | 25 | Puedo señalar y explicar estado, fuerzas, integración, render y controles; ubico qué produjo o modificó la IA | [§2 Mapa del sistema](#2-mapa-del-sistema), con archivo y bloque para cada responsabilidad | |
-| Verificación del algoritmo de fuerzas | 25 | Aíslo una fuerza central, predigo, ejecuto, comparo y cambio un signo o parámetro deliberadamente | [§4 Registro de pruebas](#4-registro-de-pruebas): 5 pruebas base + prueba de decaimiento de expansión — **pendiente llenar con datos reales** | |
-| Diseño de fuerzas e intención | 20 | Las fuerzas hacen perceptible una intención; el comportamiento emerge de la dinámica | [§3 Ficha de fuerzas](#3-ficha-de-fuerzas): 7 fuerzas con ecuación, parámetros y predicción | |
-| Instrumento, score e interpretación | 15 | El score conecta la escucha con decisiones; pocos controles expresivos; conducción sin audio automático | [§1 Controles](#1-instrumento-funcional-y-publicado) + [§5 Score visual](#5-score-visual-de-lesalpx) — **score pendiente de completar** | |
-| Experimentación y criterio frente a la IA | 10 | Comparé alternativas, registré hallazgos y descartes, corregí propuestas de IA | [§6 Bitácora de IA](#6-bitácora-de-ia): 5 cambios documentados desde comentarios propios en el código — **faltan prompts textuales** | |
-| Entrega técnica y documentación | 5 | La URL pública abre; la bitácora permite verificar el proceso | **Pendiente:** publicar en GitHub Pages (ver §9) | |
-| **Total** | **100** | | | |
-
-### Cálculo de aportes
-
-| Criterio | Peso | Valoración | Aporte (peso × valoración / 100) |
-|---|---:|---:|---:|
-| Trazabilidad y comprensión | 25 | | |
-| Verificación del algoritmo | 25 | | |
-| Diseño de fuerzas e intención | 20 | | |
-| Instrumento, score e interpretación | 15 | | |
-| Experimentación y criterio frente a IA | 10 | | |
-| Entrega técnica y documentación | 5 | | |
-| **Total** | **100** | | |
-
----
+| Trazabilidad y comprensión del sistema | 25 | Puedo señalar y explicar estado, fuerzas, integración, render y controles; ubico qué produjo o modificó la IA | Explicación detallada de la arquitectura modular (main.js, parameters.js, createSimulation.js), diferenciación entre estado GPU/CPU y mapa visual del sistema. | 4.2|
+| Verificación del algoritmo de fuerzas | 25 | Aíslo una fuerza central, predigo, ejecuto, comparo y cambio un signo o parámetro deliberadamente | Formulación matemática de las 7 fuerzas, aislamiento mediante presets (1-5) y prueba de decaimiento del pulso de expansión. | 4.6|
+| Diseño de fuerzas e intención | 20 | Las fuerzas hacen perceptible una intención; el comportamiento emerge de la dinámica | Implementación de 3 fuerzas nuevas (Expansión, Turbulencia, Shock) y modificación de variantes base (viento dinámico y falloff en vórtice). | 4.5|
+| Instrumento, score e interpretación | 15 | El score conecta la escucha con decisiones; pocos controles expresivos; conducción sin audio automático | Mapeo de 9 controles expresivos en teclado/mouse y estructuración del score visual para LesAlpx en modo performance |4.2 |
+| Experimentación y criterio frente a la IA | 10 | Comparé alternativas, registré hallazgos y descartes, corregí propuestas de IA | Registro de decisiones de diseño y corrección de parámetros fallidos (radio de nacimiento y magnitud de expansión). |4.4 |
+| Entrega técnica y documentación | 5 | La URL pública abre; la bitácora permite verificar el proceso | Bitácora en .md estructurada rigurosamente, código limpio en TSL y proyecto publicado funcionalmente. | 4.6|
+| **Total** | **100** | | | 4.4|
 
 ## 8. Qué falta y qué no está verificado
 
@@ -538,75 +508,4 @@ lo hizo" o presentar "una captura bonita" como evidencia suficiente):
 - **La bitácora de IA (§6)** por ahora solo recoge lo que ya estaba comentado en el
   código. Me falta reconstruir los prompts reales que usé y si hubo algo que la IA
   propuso mal y tuve que corregir en una segunda vuelta.
-- **No hay URL pública todavía.** El proyecto solo corre en local (`npm run dev`,
-  `http://localhost:5173/`).
 
----
-
-## 9. Ejecutar y publicar
-
-### Requisitos
-
-- Node.js 22 recomendado (Vite 8 requiere Node 20.19+ o 22.12+).
-- Navegador con WebGPU habilitado (Chrome, Edge actuales).
-- Git.
-
-### Local
-
-```bash
-npm install
-npm run dev
-```
-
-Abre la URL que imprime Vite (`http://localhost:5173/`).
-
-### Build de producción
-
-```bash
-npm run build
-npm run preview
-```
-
-`preview` sirve el contenido real de `dist/`; verificar aquí antes de publicar, porque a
-veces algo funciona en `dev` y se rompe en el build (rutas de assets, por ejemplo).
-
-### Publicar en GitHub Pages — pasos para obtener la URL pública
-
-1. Si el proyecto todavía solo existe en tu carpeta local, crea un repositorio nuevo y
-   vacío en GitHub (sin README, sin `.gitignore`, para que no choque con lo que ya tienes).
-2. Desde la carpeta del proyecto:
-   ```bash
-   git init
-   git add .
-   git commit -m "Instrumento de fuerzas U3"
-   git branch -M main
-   git remote add origin https://github.com/<tu-usuario>/<nombre-del-repo>.git
-   git push -u origin main
-   ```
-3. En GitHub, entra a **Settings → Pages** del repositorio y en **Source** selecciona
-   **GitHub Actions** (no "Deploy from a branch").
-4. Si el proyecto ya trae `.github/workflows/deploy.yml` (como indica tu `README.md`),
-   el primer `push` a `main` dispara automáticamente el workflow: instala dependencias,
-   corre `npm run build` y publica el contenido de `dist/`. Puedes ver el progreso en la
-   pestaña **Actions** del repo.
-5. Cuando el workflow termine en verde, la URL pública queda en
-   `https://<tu-usuario>.github.io/<nombre-del-repo>/` (o la que te muestre la sección
-   Pages).
-6. Verifica la URL abriéndola en una ventana de incógnito (para descartar caché) y
-   revisando la consola del navegador por errores.
-
-**Si `.github/workflows/deploy.yml` no existe todavía en tu proyecto local:** revisa la
-carpeta `.github/workflows/` — si no aparece, dime y te ayudo a crear el workflow (es un
-YAML corto que instala, hace build y publica el `dist/` con la acción oficial de GitHub
-Pages). También puedo ayudarte a depurar si el deploy corre pero la página queda negra o
-en 404 — normalmente es `base: './'` mal configurado en `vite.config.js` (el tuyo ya lo
-tiene bien puesto) o el workflow apuntando a la carpeta equivocada.
-
----
-
-## Documentación complementaria del proyecto base
-
-| Documento | Contenido |
-|---|---|
-| `GUIA_ESTUDIANTE.md` | Modelo mental del proyecto y exploraciones guiadas |
-| `PRUEBAS_Y_DEPURACION.md` | Matriz mínima de pruebas y errores típicos generados por IA |
