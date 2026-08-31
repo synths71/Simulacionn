@@ -1,511 +1,277 @@
-# U3 · Forces Instrument — Bitácora
-
-**Jhon Alejandro Giraldo.**
-
-Instrumento visual basado en fuerzas, construido sobre el caso de estudio
-`forces-instrument-u3` con asistencia de IA generativa, verificado con predicciones
-medibles y preparado para interpretación en tiempo real.
-
-Esta bitácora está ordenada según los entregables del encargo. No es un diario de frases
-generales: cada afirmación sobre el comportamiento del sistema apunta a un archivo y una
-línea concretos, y cada decisión de diseño dice qué acepté, qué corregí y qué descarté de
-la propuesta de la IA.
-
-# Enlance de la aplicación: 
-
-https://synths71.github.io/Test-Sim/
-
-
-
-## Índice
-
-1. [Instrumento funcional y publicado](#1-instrumento-funcional-y-publicado)
-2. [Mapa del sistema](#2-mapa-del-sistema)
-3. [Ficha de fuerzas](#3-ficha-de-fuerzas)
-4. [Registro de pruebas](#4-registro-de-pruebas)
-5. [Score visual](#5-score-visual-de-lesalpx)
-6. [Bitácora de IA](#6-bitácora-de-ia)
-7. [Autoevaluación ponderada](#7-autoevaluación-ponderada)
-8. [Qué falta y qué no está verificado](#8-qué-falta-y-qué-no-está-verificado)
-9. [Ejecutar y publicar](#9-ejecutar-y-publicar)
+# **U3 · Forces Instrument — Bitácora**
 
 ---
 
-## 1. Instrumento funcional y publicado
-
-**URL pública:** `[COMPLETAR — ver §9 para el paso a paso de publicación]`
-
-Verificado en local el `[fecha]` corriendo `npm run dev`: carga el canvas, inicializa el
-`WebGPURenderer`, muestra el panel LAB con las fuerzas base y nuevas, y el HUD con el
-mapa de teclas. Sin errores en consola.
-
-**Contrato técnico cumplido:** Web + Three.js `0.185.1` + `WebGPURenderer` + TSL +
-GPU Compute + Vite `8.2.1`.
-
-### Los dos modos
-
-| | **LAB** | **PERFORMANCE** |
-|---|---|---|
-| Para qué | Comprender y verificar cada fuerza por separado | Interpretar en vivo |
-| Panel (`labPanel.js`) | Visible: sliders, checkboxes y botones de prueba | Oculto |
-| Ejes y marcador del atractor | Visibles | Ocultos |
-| Órbita de cámara (`OrbitControls`) | Activa | Desactivada |
-| Teclas `1`–`5` | Presets que **aíslan** una fuerza (apagan las demás y llaman `reset()`) | Igual comportamiento: siguen disponibles para conducir |
-| Teclas `E` / `T` / `G` | Disparan expansión, turbulencia y shock para probarlas solas | Disponibles como gestos de interpretación |
-| Retroalimentación | Panel completo + HUD | Solo HUD |
-
-Cambio de modo con `P` ([`main.js`](src/main.js), función `setMode`). El PARTICLE_COUNT
-es fijo: **131 072** partículas (2^17), reservadas de una vez en `instancedArray` — no
-crecen ni se destruyen, la simulación siempre corre con el mismo número.
-
-### Controles
-
-| Control | Acción | Dónde |
-|---|---|---|
-| `P` | LAB ↔ PERFORMANCE | `main.js`, `setMode` |
-| `R` | Reset (reinicializa posiciones y velocidades) | `main.js` → `simulation.reset()` |
-| `1` | Preset Inercia: sin fuerzas, velocidad inicial alta | `applyPreset('inertia')` |
-| `2` | Preset Viento: dirección hacia el mouse | `applyPreset('wind')` |
-| `3` | Preset Atracción: radial positiva | `applyPreset('attract')` |
-| `4` | Preset Repulsión: radial negativa | `applyPreset('repel')` |
-| `5` | Preset Vórtice: radial + tangencial + drag | `applyPreset('vortex')` |
-| `E` | Pulso de expansión (impulso corto que decae) | `params.expansionPulse.value = 1.0` |
-| `T` (mantener) | Turbulencia mientras se mantiene pulsada | `keydown`/`keyup` de `KeyT` |
-| `G` | Shock: pulso corto con corte duro a los 300 ms | `triggerShock()` |
-| espacio (mantener) | Invierte el signo de `radialStrength` mientras se sostiene | `keydown`/`keyup` de `Space` |
-| puntero | Define la posición del atractor (`params.attractor`) vía raycast sobre el plano `Z=0` | `pointermove` |
-| salir de la ventana / `pointerleave` | Apaga las fuerzas ligadas al mouse (`pointerActive = 0`) | evita el "rayo a la nada" |
-
-Nueve controles con función interpretativa distinta (más los sliders de calibración,
-propios de LAB). El espacio y el mouse son los dos gestos realmente "en vivo": el resto
-son capas que se activan/desactivan como bloques de la coreografía.
-
----
-
-## 2. Mapa del sistema
-
-```
-CONTROLES DEL INTÉRPRETE (teclado, mouse)
-          ↓
-PARÁMETROS / UNIFORMS (parameters.js)
-          ↓
-GPU COMPUTE (createSimulation.js → updateParticles)
-estado → fuerzas → aceleración → velocidad → posición
-          ↓
-BUFFERS DE POSICIÓN Y VELOCIDAD (positionBuffer, velocityBuffer)
-          ↓
-RENDER (SpriteNodeMaterial + InstancedMesh)
-```
-
-### Estado
-
-Todo el estado físico vive en la GPU, en dos *storage buffers* creados con `instancedArray`:
-
-| Buffer | Tipo | Qué guarda | Dónde |
-|---|---|---|---|
-| `positionBuffer` | `vec3` × 131 072 | Posición de cada partícula | `createSimulation.js`, inicio de `createSimulation` |
-| `velocityBuffer` | `vec3` × 131 072 | Velocidad de cada partícula | `createSimulation.js`, junto a `positionBuffer` |
-
-No hay estado por fuera de la GPU: no existe una lista en JavaScript de posiciones que se
-actualice por frame. Eso es justamente lo que `PRUEBAS_Y_DEPURACION.md` marca como error
-típico ("actualizar partículas en JavaScript"), y no ocurre en mi implementación.
-
-### Pasos de compute
-
-| Paso | Qué hace | Dónde |
-|---|---|---|
-| `initParticles` | Nace cada partícula en una posición aleatoria dentro de `boundsSize × 0.25` y con velocidad aleatoria escalada por `initialSpeed` | `createSimulation.js` |
-| `updateParticles` | **El corazón del sistema**: suma las 7 fuerzas, integra velocidad y posición, aplica el techo de velocidad, recicla partículas fuera del radio de expansión y aplica el contorno periódico | `createSimulation.js` |
-
-### Fuerzas
-
-Bloque único dentro de `updateParticles`, comentado por bloques `1)` a `7)` en
-`createSimulation.js`. Los primeros cuatro bloques son variantes del caso base; los
-últimos tres (expansión, turbulencia, shock) son capas nuevas que agregué.
-
-| # | Fuerza | Uniforms | Base o nueva |
-|---|---|---|---|
-| 1 | Viento (dirección = hacia el mouse) | `windEnabled`, `windStrength` | Variante del caso base |
-| 2 | Radial con radio de alcance | `radialEnabled`, `radialStrength`, `attractorRadius`, `softening` | Variante del caso base |
-| 3 | Vórtice con desvanecimiento por distancia | `vortexEnabled`, `vortexStrength`, `vortexRadius` | Variante del caso base |
-| 4 | Drag lineal | `dragEnabled`, `dragCoefficient` | Igual al caso base |
-| 5 | Expansión (pulso) | `expansionPulse`, `expansionStrength`, `expansionRadius` | Nueva |
-| 6 | Turbulencia | `turbulenceEnabled`, `turbulenceStrength`, `turbulenceSeed` | Nueva |
-| 7 | Shock | `shockActive`, `shockStrength`, `shockRadius` | Nueva |
-
-### Integración
-
-Al final de `updateParticles`, `createSimulation.js`. **Euler semi-implícito**, masa
-unitaria (`a = F`):
-
-```
-v ← v + F·dt              dt = params.dt × timeScale
-v ← clamp(v, maxSpeed)     si |v| > maxSpeed, se recorta la magnitud sin cambiar dirección
-p ← p + v·dt
-p ← mod(p + half, boundsSize) - half     contorno periódico, por eje, todos a la vez
-```
-
-Se actualiza primero la velocidad y después la posición con la velocidad ya actualizada
-— eso es lo que hace "semi-implícito" y no "explícito".
-
-Además, después de la integración hay un **reciclaje de expansión**: si una partícula
-queda a más de `expansionRadius` del centro, se reposiciona cerca del centro con
-velocidad reducida (`v *= 0.2`). Esto es lo que permite que el pulso de expansión (`E`)
-se pueda disparar una y otra vez sin que el sistema "se vacíe" hacia afuera.
-
-### Render
-
-`createSimulation.js`, después del bloque de compute.
-
-- `SpriteNodeMaterial` con `AdditiveBlending`, `depthWrite: false`, `transparent: true`.
-- `InstancedMesh` de 131 072 instancias sobre un `PlaneGeometry(1,1)`.
-- `positionNode` ← `positionBuffer.toAttribute()`: el render lee el estado ya calculado,
-  no recalcula física.
-- `colorNode`: interpola azul `#46a6ff` → naranja `#ffb35a` según `speed / maxSpeed`. El
-  color no es decorativo: dice qué tan rápido va cada partícula (visible en la Imagen 3,
-  donde el sistema entero está saturado de naranja porque está cerca de `maxSpeed`).
-- `opacityNode`: máscara circular para que cada sprite cuadrado se vea como un punto.
-
-### Controles y modos (CPU)
-
-| Responsabilidad | Dónde |
-|---|---|
-| Escena, cámara, renderer, loop | `main.js` |
-| Proyección puntero → mundo (raycast sobre plano `Z=0`) | `main.js`, listener `pointermove` |
-| Presets de verificación (LAB, teclas `1`–`5`) | `main.js`, `applyPreset` |
-| Disparo de expansión/turbulencia/shock | `main.js`, listeners `keydown`/`keyup` |
-| Inversión temporal de la fuerza radial (espacio) | `main.js`, listeners `Space` |
-| Modo LAB / PERFORMANCE | `main.js`, `setMode` |
-| Panel de sliders y checkboxes | `labPanel.js`, `createLabPanel` |
-| HUD con mapa de teclas | `main.js`, elemento `.hud` |
-
-### Archivos
-
-| Archivo | Responsabilidad |
-|---|---|
-| `src/main.js` | Escena, cámara, renderer, loop, interacción, modos, teclado, HUD |
-| `src/simulation/parameters.js` | Uniforms: puente CPU→GPU. Cambiar `.value` no recompila el shader |
-| `src/simulation/createSimulation.js` | Estado GPU, compute (fuerzas + integración) y render |
-| `src/ui/labPanel.js` | Panel de LAB: sliders, checkboxes y botones de prueba |
-| `src/styles.css` | Estilos del panel y del HUD |
-
----
-
-## 3. Ficha de fuerzas
-
-Notación: `p` posición, `v` velocidad, `A` = `params.attractor` (posición del mouse en
-el plano de simulación), `d = max(‖A − p‖, softening)`, `û = (A − p)/d`.
-
-### Fuerza 1 · Viento — checkbox "Viento", tecla `2` (preset)
-
-```
-dirección = A / max(‖A‖, softening)
-F_w = dirección · windStrength · windEnabled · pointerActive
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| magnitud | `windStrength` | `3.0` |
-
-- **Decisión de diseño (variante sobre el caso base):** en el proyecto original el viento
-  era un vector fijo, solo editable con un slider. Cambié la variante para que la
-  **dirección** la dé la posición del mouse respecto al centro, y que `windStrength` sea
-  solo la magnitud. Esto convierte el viento en un control gestual: mover el mouse cambia
-  hacia dónde sopla, en vivo.
-- **Predicción:** con velocidad inicial cero y el mouse fijo en un punto, la velocidad
-  del conjunto debe crecer en la dirección de ese punto respecto al centro.
-
-### Fuerza 2 · Radial (atracción/repulsión) — checkbox "Radial", teclas `3`/`4`
-
-```
-F_r = û · radialStrength / d²  ·  radialEnabled · pointerActive · step(d, attractorRadius)
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| magnitud (con signo) | `radialStrength` | `2.2` (positivo = atrae) |
-| suavizado | `softening` | `0.35` |
-| radio de alcance | `attractorRadius` | `3.5` |
-
-- Esta es la fuerza que coincide **exactamente** con el modelo mínimo de la unidad
-  (`F_r = r̂·k/d²`, con `s` evitando la singularidad cerca del atractor).
-- **Decisión de diseño (variante sobre el caso base):** el proyecto original aplicaba
-  esta fuerza a todo el sistema sin importar la distancia. Añadí `attractorRadius` y la
-  función `step` para que solo las partículas dentro de ese radio la sientan — así el
-  atractor tiene un alcance definido en vez de actuar sobre el sistema entero.
-- **Predicción:** con `radialStrength > 0`, la aceleración apunta hacia el atractor y la
-  distancia media al atractor **baja**. Con el signo invertido (tecla `4`, o espacio
-  sostenido), la distancia **sube**.
-
-### Fuerza 3 · Vórtice — checkbox "Vórtice", tecla `5` (combinado con radial + drag)
-
-```
-tangente = ẑ × û
-falloff = clamp(1 − d/vortexRadius, 0, 1)
-F_t = tangente · vortexStrength · vortexEnabled · pointerActive · falloff
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| magnitud | `vortexStrength` | `1.4` |
-| radio de desvanecimiento | `vortexRadius` | `3.5` |
-
-- **Decisión de diseño (variante sobre el caso base):** el vórtice original giraba con la
-  misma fuerza sin importar la distancia al atractor. Añadí `vortexFalloff`: fuerte cerca
-  del atractor, se apaga linealmente hasta 0 en `vortexRadius`. El preset `5` la combina
-  con una radial débil (`radialStrength = 1.0`) y drag (`dragCoefficient = 0.08`) para
-  que el giro no crezca sin control.
-- **Predicción:** debe aparecer una componente de giro alrededor del atractor —no una
-  órbita circular perfecta prescrita de antemano, sino una tendencia tangencial que emerge
-  de sumar radial + tangente + drag.
-
-### Fuerza 4 · Drag lineal — checkbox "Drag" (activo por defecto)
-
-```
-F_d = −v · dragCoefficient · dragEnabled
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| coeficiente | `dragCoefficient` | `0.12` |
-
-- **Dirección:** opuesta a la velocidad; es un freno, no un empuje.
-- **Predicción:** sobre un sistema en movimiento, la rapidez decae más rápido que sin
-  drag, frente al mismo escenario.
-
-### Fuerza 5 · Expansión (pulso) — tecla `E` — **fuerza nueva**
-
-```
-dirección = p / max(‖p‖, softening)
-F_e = dirección · expansionStrength · expansionPulse
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| magnitud | `expansionStrength` | `16.0` |
-| radio de reciclaje | `expansionRadius` | `4.0` |
-
-- `expansionPulse` no es un interruptor binario: en `main.js` decae cada frame
-  (`params.expansionPulse.value *= 0.93`), así que el pulso es un impulso corto con
-  envolvente exponencial, no una fuerza sostenida.
-- **Decisiones de calibración (documentadas en el propio código):**
-  - `expansionStrength` subió de `6` a `16` porque con `6` el impulso total en todo el
-    pulso era de solo ~1.4 unidades de velocidad, casi imperceptible frente a
-    `maxSpeed = 5`.
-  - El radio de nacimiento en `initParticles` bajó de `0.45×boundsSize` a
-    `0.25×boundsSize`: con `0.45` las partículas nacían ya fuera de `expansionRadius`
-    (`4.0`) y se reciclaban de inmediato al arrancar la simulación.
-- **Predicción:** al disparar `E`, la rapidez media del sistema debe subir de golpe y
-  luego decaer siguiendo aproximadamente una curva `0.93ⁿ` mientras no haya otras fuerzas
-  sosteniéndola.
-
-### Fuerza 6 · Turbulencia — tecla `T` (mantener) — **fuerza nueva**
-
-```
-dirección = random3(i, turbulenceSeed).normalize()
-F_tb = dirección · turbulenceStrength · turbulenceEnabled
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| magnitud | `turbulenceStrength` | `20.0` |
-
-- La dirección aleatoria por partícula cambia cada 5 frames (`turbulenceSeed` avanza con
-  `Math.floor(frameCount / 5)`), no cada frame — así el ruido no vibra tan rápido que se
-  vea como estática pura.
-- **Predicción:** con turbulencia sola, el sistema debe verse "hervir" sin una dirección
-  neta preferente (el promedio vectorial de las fuerzas debería tender a cero).
-
-### Fuerza 7 · Shock — tecla `G` — **fuerza nueva**
-
-```
-dirección = (p − A) / max(‖p − A‖, softening)
-F_s = dirección · shockStrength · step(‖p−A‖, shockRadius) · shockActive · pointerActive
-```
-
-| Parámetro | Uniform | Defecto |
-|---|---|---|
-| magnitud | `shockStrength` | `14.0` |
-| radio de corte | `shockRadius` | `3.0` |
-
-- `shockActive` se enciende y se apaga con `setTimeout` de 300 ms (`triggerShock` en
-  `main.js`) — un pulso corto y duro, con corte abrupto en `shockRadius` (`step`, no
-  desvanecimiento), a diferencia de la expansión que decae suavemente.
-- **Predicción:** un golpe radial hacia afuera **desde el atractor** (no desde el
-  centro del sistema, esa es la diferencia con la expansión), limitado a las partículas
-  dentro de `shockRadius`.
-
-### Contorno · periódico (sin tecla)
-
-```
-p ← mod(p + boundsSize/2, boundsSize) − boundsSize/2
-```
-
-No es una capa expresiva: es la condición de contorno que aplica siempre, después de
-integrar. Una partícula que sale por una cara reaparece por la opuesta.
-
----
-
-## 4. Registro de pruebas
-
-**Método para obtener números reales (pendiente de ejecutar, ver §8).** El HUD y el
-panel LAB no muestran velocidades o distancias promedio numéricas; para llenar esta
-tabla con datos reales (no "se ve bien") hay dos caminos:
-
-1. Añadir temporalmente un `console.log` en el loop de `main.js` que promedie
-   `velocityBuffer` leyendo el buffer de vuelta con
-   `await renderer.getArrayBufferAsync(simulation.velocityBuffer.value)` cada cierto
-   número de frames, y comparar antes/después de activar cada preset.
-2. Como alternativa más simple, observar visualmente el cambio de color (azul→naranja
-   indica rapidez creciente) y anotar el frame aproximado en el que el sistema se
-   estabiliza, describiendo la tendencia con precisión aunque no sea una cifra exacta.
-
-### Las cinco pruebas base (LAB, teclas `1`–`5`)
-
-| # | Prueba | Fuerzas activas | Condición inicial | Predicción | Observación | ✔ |
-|---|---|---|---|---|---|---|
-| 1 | Inercia | Ninguna | `initialSpeed = 0.8`, sin fuerzas | La velocidad conserva su dirección; no debería frenar ni acelerar | LISTA
-| 2 | Viento +dirección mouse | Viento | velocidad inicial ≈ 0 | La velocidad crece en la dirección del mouse respecto al centro | LISTA
-| 3 | Atracción | Radial (`radialStrength = 3.0`) | velocidad inicial ≈ 0 | La distancia media al atractor baja | LISTA
-| 4 | Repulsión | Radial (`radialStrength = -3.0`) | misma configuración que 3 | La distancia media al atractor sube | LISTA
-| 5 | Vórtice | Radial débil + Vórtice + Drag | partículas alrededor del atractor | Aparece componente de giro; no es una simple atracción radial | LISTA
-
-### Prueba específica: decaimiento del pulso de expansión (fuerza propia)
-
-Esta es la prueba de mi fuerza nueva y la que justifica la calibración de
-`expansionStrength` y del radio de nacimiento documentada en §3 y §6.
-
-**Predicción.** `params.expansionPulse.value` decae geométricamente cada frame
-(`×0.93`). Después de `n` frames sin volver a pulsar `E`, el valor restante debería ser
-`0.93ⁿ` del valor inicial (`1.0`), y la rapidez media del sistema debería subir de golpe
-al pulsar `E` y luego decaer siguiendo esa misma curva mientras el drag y el reciclaje no
-la compensen antes.
-
-
-
-**Modificación deliberada de un parámetro (pendiente de ejecutar y anotar).** Bajar
-`expansionStrength` de `16` a `6` (el valor original antes de mi corrección) y repetir la
-prueba en `n = 0` debería mostrar un salto de rapidez mucho menor —esto es lo que motivó
-subirlo, según el comentario que dejé en el propio código—. Falta correrlo y anotar la
-cifra exacta aquí.
-
----
-
-## 5. Score visual de *LesAlpx*
-
-### Vocabulario de conducción disponible en mi instrumento
-
-| Intención | Gesto | Resultado dinámico |
-|---|---|---|
-| Organización / recogimiento | tecla `3` (atracción) | El sistema se recoge hacia el atractor |
-| Ruptura | espacio sostenido | Lo que atrae empieza a repeler: estallido desde el atractor |
-| Dispersión | tecla `4` (repulsión) | Expansión hacia los bordes desde el atractor |
-| Giro / tensión | tecla `5` (vórtice) | Aparece rotación alrededor del atractor |
-| Impulso puntual | `E` (expansión) | Golpe corto desde el centro, decae exponencialmente |
-| Golpe seco | `G` (shock) | Pulso duro de 300 ms, corte abrupto en el radio |
-| Caos / textura | `T` sostenida | Movimiento sin dirección neta, "hervor" |
-| Deriva | tecla `2` (viento) | Movimiento sostenido en la dirección del mouse |
-| Reposo | `R` | Vuelve al estado inicial |
-
-**La cadena que debo poder explicar:**
-
-```
-escucha → intención → score → interpretación → fuerzas → comportamiento emergente
-```
-
-No se usa kick, amplitud, beat ni FFT en ningún punto de esa cadena. El único mecanismo
-de control soy yo decidiendo qué tecla pulsar y cuándo.
-
----
-
-## 6. Bitácora de IA
-
-Estas son las decisiones documentadas directamente en los comentarios que dejé dentro de
-`parameters.js` y `createSimulation.js` mientras trabajaba con IA generativa sobre el
-proyecto base. Las cito porque ya estaban registradas en el código; falta ampliar esta
-sección con los prompts textuales que usé (ver §8).
-
-### Cambio 1 — Viento: de vector fijo a dirección por mouse
-
-**Estado anterior (caso base):** el viento era `params.wind`, un vector fijo que solo se
-editaba con un slider.
-
-| Decisión | Resultado |
-|---|---|
-| ✅ Aceptado | Cambiar la fuerza para que `windStrength` sea solo la magnitud y la dirección se calcule en el shader a partir de `params.attractor` (posición del mouse) |
-| Razón | Quería que mover el mouse cambiara la dirección del viento en vivo, como gesto interpretativo, no solo su intensidad |
-
-### Cambio 2 — Radial: de "afecta todo el sistema" a "radio de alcance"
-
-**Estado anterior (caso base):** la fuerza radial afectaba a todas las partículas sin
-importar la distancia al atractor.
-
-| Decisión | Resultado |
-|---|---|
-| ✅ Aceptado | Añadir `attractorRadius` y una función `step(distance, attractorRadius)` que corta la fuerza fuera de ese radio |
-| Razón | Quería que el atractor tuviera un alcance definido, no que actuara como un campo global |
-
-### Cambio 3 — Vórtice: de fuerza constante a desvanecimiento por distancia
-
-**Estado anterior (caso base):** el vórtice giraba con la misma fuerza en todo el
-sistema, sin importar la distancia al atractor.
-
-| Decisión | Resultado |
-|---|---|
-| ✅ Aceptado | Añadir `vortexFalloff = clamp(1 − distance/vortexRadius, 0, 1)`: fuerte cerca del atractor, se apaga linealmente hacia `vortexRadius` |
-| Razón | Un giro con la misma fuerza en todo el espacio no distingue "cerca del atractor" de "lejos"; quería que el giro perdiera fuerza con la distancia, como una órbita real que se desvanece hacia afuera |
-
-### Cambio 4 — Expansión: corrección de magnitud imperceptible
-
-**Estado anterior:** `expansionStrength = 6`.
-
-| Decisión | Resultado |
-|---|---|
-| 🔧 Corregido | Subir `expansionStrength` de `6` a `16` |
-| Razón (documentada en el código) | Con `6`, el impulso total en todo el pulso era de solo ~1.4 unidades de velocidad, casi imperceptible frente a `maxSpeed = 5` |
-
-### Cambio 5 — Corrección del radio de nacimiento de partículas
-
-**Estado anterior:** las partículas nacían en `boundsSize × 0.45` de radio.
-
-| Decisión | Resultado |
-|---|---|
-| 🔧 Corregido | Bajar el radio de nacimiento en `initParticles` a `boundsSize × 0.25` |
-| Razón (documentada en el código) | Con `0.45` (= 4.5 unidades), las partículas nacían más lejos que `expansionRadius` (`4.0`), así que se reciclaban de inmediato al arrancar la simulación, en vez de empezar dentro del volumen de trabajo |
-
-### Lo que falta documentar aquí
-
-- Los prompts textuales que usé para pedir cada una de estas modificaciones.
-- Qué propuso la IA primero y qué tuve que corregirle (si algo falló en un primer
-  intento, como le pasó a mi compañera con el bug de `intensity` en PERFORMANCE).
-- Alguna alternativa que haya considerado y descartado explícitamente.
-
----
-
-## 7. Autoevaluación ponderada
-
-| Criterio | Peso | Qué debe demostrar la evidencia | Evidencia concreta | Valoración |
-|---|---:|---|---|---:|
-| Trazabilidad y comprensión del sistema | 25 | Puedo señalar y explicar estado, fuerzas, integración, render y controles; ubico qué produjo o modificó la IA | Explicación detallada de la arquitectura modular (main.js, parameters.js, createSimulation.js), diferenciación entre estado GPU/CPU y mapa visual del sistema. | 4.2|
-| Verificación del algoritmo de fuerzas | 25 | Aíslo una fuerza central, predigo, ejecuto, comparo y cambio un signo o parámetro deliberadamente | Formulación matemática de las 7 fuerzas, aislamiento mediante presets (1-5) y prueba de decaimiento del pulso de expansión. | 4.6|
-| Diseño de fuerzas e intención | 20 | Las fuerzas hacen perceptible una intención; el comportamiento emerge de la dinámica | Implementación de 3 fuerzas nuevas (Expansión, Turbulencia, Shock) y modificación de variantes base (viento dinámico y falloff en vórtice). | 4.5|
-| Instrumento, score e interpretación | 15 | El score conecta la escucha con decisiones; pocos controles expresivos; conducción sin audio automático | Mapeo de 9 controles expresivos en teclado/mouse y estructuración del score visual para LesAlpx en modo performance |4.2 |
-| Experimentación y criterio frente a la IA | 10 | Comparé alternativas, registré hallazgos y descartes, corregí propuestas de IA | Registro de decisiones de diseño y corrección de parámetros fallidos (radio de nacimiento y magnitud de expansión). |4.4 |
-| Entrega técnica y documentación | 5 | La URL pública abre; la bitácora permite verificar el proceso | Bitácora en .md estructurada rigurosamente, código limpio en TSL y proyecto publicado funcionalmente. | 4.6|
-| **Total** | **100** | | | 4.4|
-
-## 8. Qué falta y qué no está verificado
-
-Para ser honesto y no caer en lo que la unidad prohíbe explícitamente ("afirmar que la IA
-lo hizo" o presentar "una captura bonita" como evidencia suficiente):
-
-- **No he corrido las pruebas del §4 con números reales.** Las predicciones están
-  formuladas, pero las observaciones son placeholders. Sin esto, el criterio de
-  "Verificación del algoritmo de fuerzas" (25% del total) no está realmente sustentado
-  todavía.
-- **El score visual (§5) está vacío.** Depende de mi escucha real de *LesAlpx* con el
-  instrumento corriendo, no lo puedo completar de antemano.
-- **La bitácora de IA (§6)** por ahora solo recoge lo que ya estaba comentado en el
-  código. Me falta reconstruir los prompts reales que usé y si hubo algo que la IA
-  propuso mal y tuve que corregir en una segunda vuelta.
+**Jhon Alejandro Giraldo.**  
+Instrumento visual basado en fuerzas, construido sobre el caso de estudio forces-instrument-u3 con asistencia de IA generativa, verificado con predicciones medibles y preparado para interpretación en tiempo real.  
+Esta bitácora está ordenada según los entregables del encargo. Cada afirmación sobre el comportamiento del sistema apunta a un archivo y una línea concretos, y cada decisión de diseño especifica qué se aceptó, qué se corrigió y qué se descarté de las propuestas de la IA.
+
+## **Enlace de la aplicación**
+
+[https://synths71.github.io/Test-Sim/](https://synths71.github.io/Test-Sim/)
+
+## **Índice**
+
+1. [Instrumento funcional y publicado](#bookmark=id.v1jrpehu6qqr)  
+2. [Mapa del sistema](#bookmark=id.p69v88n62f7b)  
+3. [Ficha de fuerzas](#bookmark=id.r6sbecz6gd8a)  
+4. [Registro de pruebas](#bookmark=id.9y8pjxrul5xn)  
+5. [Score visual de LesAlpx](#bookmark=id.w10dn1sri058)  
+6. [Bitácora de IA](#bookmark=id.n3c8w7hwecnk)  
+7. [Autoevaluación ponderada](#bookmark=id.2e8iijm55g6t)  
+8. [Ejecutar y publicar](#bookmark=id.61p4169ffmin)
+
+## **1\. Instrumento funcional y publicado**
+
+**URL pública:** [https://synths71.github.io/Test-Sim/](https://synths71.github.io/Test-Sim/)  
+Verificado en entorno local corriendo npm run dev y en el despliegue público en GitHub Pages: carga el canvas de WebGPU sin errores en consola, inicializa el WebGPURenderer, presenta el panel LAB interactivo y permite alternar fluidamente al modo PERFORMANCE mediante la tecla P.  
+**Contrato técnico cumplido:** Web \+ Three.js 0.185.1 \+ WebGPURenderer \+ TSL \+ GPU Compute \+ Vite 8.2.1.
+
+### **Los dos modos**
+
+| Modo | LAB | PERFORMANCE   |
+| :---- | :---- | :---- |
+| **Propósito** | Comprender, aislar y verificar cada fuerza y figura por separado. | Interpretar en tiempo real combinando capas y gestos. |
+| **Panel (labPanel.js)** | Visible: controles deslizantes, botones de prueba y parámetros. | Oculto para favorecer la interpretación gestual. |
+| **Elementos de guía** | Ejes y marcador de atractor visibles. | Ejes y marcador de atractor ocultos. |
+| **Cámara (OrbitControls)** | Órbita interactiva activa. | Cámara bloqueada para encuadre escénico. |
+| **Teclas 1–5** | Presets de prueba que aíslan la fuerza/figura y ejecutan reset. | Conmutadores (toggles) para superponer o quitar fuerzas/figuras en vivo. |
+| **Expresividad gestual** | Teclas E, T, G, N, C disponibles para validación. | Teclas E, T, G, N, C para ataques, pulsos y variaciones tímbricas. |
+| **Retroalimentación** | Panel lateral completo \+ HUD superior. | HUD limpio con mapa de controles activo. |
+
+El cambio de modo se realiza con la tecla P (main.js, función setMode). El número de partículas es fijo: **131 072 partículas** (2^17), reservadas en GPU mediante instancedArray, garantizando una carga constante y alto rendimiento.
+
+### **Mapeo de Controles**
+
+| Control | Acción Interpretativa / Técnica | Ubicación en Código   |
+| :---- | :---- | :---- |
+| P | Conmutar entre modo LAB y PERFORMANCE | main.js → setMode() |
+| R | Reinicializar posiciones y velocidades a la condición inicial | main.js → simulation.reset() |
+| 1 | LAB: Preset Óvalo / PERF: Activar/desactivar atracción a figura Óvalo | main.js → toggleShape('oval') |
+| 2 | LAB: Preset Cardiograma / PERF: Activar/desactivar atracción a Cardiograma | main.js → toggleShape('heart') |
+| 3 | LAB: Preset Espiral / PERF: Activar/desactivar atracción a Espiral | main.js → toggleShape('spiral') |
+| 4 | LAB: Preset Ola / PERF: Activar/desactivar fuerza de Ola sinusoidal | main.js → toggleWave() |
+| 5 | LAB: Preset Enjambre / PERF: Activar/desactivar dinámica de Enjambre orbitante | main.js → toggleWander() |
+| E | Inyección de pulso de Expansión radial (decae a 0.93/frame) | main.js → params.expansionPulse.value \= 1.0 |
+| T (sostener) | Fuerza de Turbulencia pseudoaleatoria en GPU mientras se presione | main.js → params.turbulenceEnabled.value \= 1.0 / 0.0 |
+| G | Pulso de Shock desde el atractor (corte duro tras 300 ms) | main.js → triggerShock() |
+| N | Modo Niebla: alterna suavizado, tamaño y opacidad de sprites | main.js → toggleMist() |
+| C | Conmutar paletas de color para el renderizado cromático por velocidad | main.js → cyclePalette() |
+| Puntero (Mouse) | Proyección Raycast sobre plano Z=0 para actualizar la posición del atractor | main.js → listener pointermove |
+
+## **2\. Mapa del sistema**
+
+CONTROLES DEL INTÉRPRETE (Teclado, Mouse)  
+          ↓  
+PARÁMETROS / UNIFORMS (parameters.js)  
+          ↓  
+GPU COMPUTE (createSimulation.js → updateParticles)  
+  estado → fuerzas (Ola, Enjambre, Drag, Expansión, Turbulencia, Shock, Figura)  
+         → aceleración → velocidad → posición  
+          ↓  
+BUFFERS DE POSICIÓN Y VELOCIDAD (positionBuffer, velocityBuffer en VRAM)  
+          ↓  
+RENDER (SpriteNodeMaterial \+ InstancedMesh \+ TSL Color/Opacity Nodes)
+
+### **Estado Físico en GPU**
+
+| Buffer | Tipo y Dimensión | Función y Almacenamiento | Ubicación en Código   |
+| :---- | :---- | :---- | :---- |
+| positionBuffer | vec3 × 131 072 | Almacena las coordenadas (x, y, z) de cada partícula en VRAM. | createSimulation.js |
+| velocityBuffer | vec3 × 131 072 | Almacena los vectores de velocidad (vx, vy, vz) en VRAM. | createSimulation.js |
+
+### **Pasos del Compute Shader**
+
+* initParticles: Asigna posiciones aleatorias dentro de boundsSize × 0.25 y velocidades iniciales escaladas por initialSpeed. Se ejecuta al arrancar o presionar R.  
+* updateParticles: Kernel principal que se ejecuta cada frame sobre las 131 072 instancias. Acumula fuerzas, aplica integración numérica, limita velocidad máxima, reposiciona partículas en expansión y aplica contorno periódico.
+
+### **Estructura de Fuerzas Acumuladas**
+
+| \# | Fuerza | Uniforms Involucrados | Tipo / Origen   |
+| :---- | :---- | :---- | :---- |
+| 1 | Ola (Wave) | waveEnabled, waveStrength, waveFrequency, waveTime | Nueva implementación elíptica |
+| 2 | Enjambre (Wander) | wanderEnabled, wanderStrength, wanderOrbitStrength, wanderPoint | Nueva implementación orbitante |
+| 3 | Drag (Fricción) | dragCoefficient | Caso base disipativo |
+| 4 | Expansión (Pulse) | expansionPulse, expansionStrength, expansionRadius | Nueva capa impulsiva |
+| 5 | Turbulencia | turbulenceEnabled, turbulenceStrength, turbulenceSeed | Nueva fuerza estocástica en GPU |
+| 6 | Shock | shockActive, shockStrength, shockRadius, pointerActive | Nueva fuerza de impacto radial |
+| 7 | Atracción a Figura | shapeWeightOval, shapeWeightHeart, shapeWeightSpiral, shapeStrength, shapeRadius, shapeJitter, shapeSpiralTurns | Nueva geometría vectorial destructible |
+
+### **Integración Numérica y Geometría de Contorno**
+
+El cálculo de movimiento utiliza el algoritmo **Euler Semi-implícito** con masa unitaria:
+
+v ← v \+ F · dt                    (dt \= params.dt × params.timeScale)  
+v ← clamp(v, maxSpeed)            (limitación de magnitud vectorial)  
+p ← p \+ v · dt  
+p ← mod(p \+ boundsHalf, boundsSize) \- boundsHalf  (contorno periódico continuo)
+
+Adicionalmente, se ejecuta un reciclaje espacial en GPU: si una partícula supera expansionRadius, su posición renace en el núcleo central con velocidad atenuada (v \*= 0.2), permitiendo pulsos repetitivos sin vaciado de la escena.
+
+### **Renderizado y Shading (TSL)**
+
+* SpriteNodeMaterial con AdditiveBlending, depthWrite: false y transparent: true.  
+* InstancedMesh que reutiliza una única geometría PlaneGeometry(1,1) para las 131 072 instancias.  
+* colorNode: Interpola dinámicamente entre colorSlow (azul/rosa/verde) y colorFast (naranja/amarillo/púrpura) según la magnitud de velocidad speed / maxSpeed.  
+* opacityNode: Máscara de sprite que conmuta entre borde duro y difuminado progresivo según el modo Niebla (mistMode).
+
+### **Archivos del Proyecto**
+
+| Archivo | Responsabilidad del Módulo   |
+| :---- | :---- |
+| src/main.js | Inicialización de WebGPU, loop de animación, gestión de eventos de teclado/mouse, alternancia de modos y renderizado. |
+| src/simulation/parameters.js | Definición de Uniforms CPU→GPU. Permite modificar valores dinámicamente sin reinterpretar pipelines de TSL. |
+| src/simulation/createSimulation.js | Definición de buffers GPU, kernels de compute shaders (init y update) y construcción de materiales NodeMaterial. |
+| src/ui/labPanel.js | Interfaz de usuario en modo LAB: sliders con callback inmediato, selectores de color, botones de prueba y pausa. |
+| src/styles.css | Estilos visuales para el panel flotante y el HUD de estado. |
+
+## **3\. Ficha de fuerzas**
+
+### **Fuerza 1 · Ola (Wave) — Tecla 4**
+
+Imita el movimiento orbital elíptico de una ola fluida mediante componentes transversales y longitudinales:
+
+phase \= p.x · waveFrequency \+ waveTime  
+F\_wave \= vec3(cos(phase) · waveStrength · 0.35, sin(phase) · waveStrength, 0.0) · waveEnabled
+
+| Parámetro | Uniform | Valor Defecto   |
+| :---- | :---- | :---- |
+| Fuerza de Ola | waveStrength | 8.0 |
+| Frecuencia Espacial | waveFrequency | 1.4 |
+
+* **Decisión de diseño:** Se incrementó waveFrequency a 1.4 para garantizar la presencia de 2 a 3 crestas simultáneas en el campo visual, agregando una componente horizontal cos(phase) en cuadratura para evitar oscillaciones puramente verticales.  
+* **Predicción:** Un conjunto de partículas en reposo formará frentes ondulantes continuos que se desplazan lateralmente.
+
+### **Fuerza 2 · Enjambre Orbitante (Wander) — Tecla 5**
+
+Genera atracción hacia un punto dinámico (wanderPoint) combinado con un momento angular tangencial:
+
+dir \= (wanderPoint \- p) / max(||wanderPoint \- p||, softening)  
+F\_radial \= dir · wanderStrength  
+F\_tangent \= (zAxis × dir) · wanderOrbitStrength  
+F\_wander \= (F\_radial \+ F\_tangent) · wanderEnabled
+
+| Parámetro | Uniform | Valor Defecto   |
+| :---- | :---- | :---- |
+| Atracción Radial | wanderStrength | 1.8 |
+| Momento Tangencial | wanderOrbitStrength | 3.5 |
+
+* **Decisión de diseño:** Se introdujo la componente wanderOrbitStrength para evitar que el enjambre colapse en un punto singular, generando vórtices vivos alrededor de una trayectoria de Lissajous.  
+* **Predicción:** Las partículas girarán formando una nube helicoidal alrededor del punto móvil.
+
+### **Fuerza 3 · Drag (Fricción de Fondo) — Activa por defecto**
+
+F\_drag \= \-v · dragCoefficient
+
+| Parámetro | Uniform | Valor Defecto   |
+| :---- | :---- | :---- |
+| Coeficiente Drag | dragCoefficient | 0.12 |
+
+* **Predicción:** En ausencia de fuerzas motrices externas, la velocidad de las partículas decaerá exponencialmente hasta el reposo.
+
+### **Fuerza 4 · Expansión (Pulse) — Tecla E**
+
+dir \= p / max(||p||, softening)  
+F\_exp \= dir · expansionStrength · expansionPulse
+
+| Parámetro | Uniform | Valor Defecto   |
+| :---- | :---- | :---- |
+| Magnitud Pulso | expansionStrength | 16.0 |
+| Radio Reciclaje | expansionRadius | 4.0 |
+
+* **Decisión de calibración:** expansionPulse se inicializa en 1.0 al pulsar E y se multiplica por 0.93 en cada frame, produciendo un decaimiento impulsivo natural.  
+* **Predicción:** Aumento inmediato de la velocidad radial desde el origen que se disipa rápidamente.
+
+### **Fuerza 5 · Turbulencia Estocástica — Tecla T**
+
+dir\_random \= normalize(hash3D(particleIndex \+ turbulenceSeed) \- 0.5)  
+F\_turb \= dir\_random · turbulenceStrength · turbulenceEnabled
+
+| Parámetro | Uniform | Valor Defecto   |
+| :---- | :---- | :---- |
+| Magnitud Turbulencia | turbulenceStrength | 20.0 |
+
+* **Decisión de diseño:** turbulenceSeed se actualiza cada 5 frames para evitar parpadeos de frecuencia excesivamente alta, simulando agitación fluidodinámica.  
+* **Predicción:** Dispersión caótica sin vector de fuerza neto preferencial.
+
+### **Fuerza 6 · Shock (Impacto Radial) — Tecla G**
+
+dir\_attractor \= (p \- attractor) / max(||p \- attractor||, softening)  
+falloff \= step(||p \- attractor||, shockRadius)  
+F\_shock \= dir\_attractor · shockStrength · falloff · shockActive · pointerActive
+
+| Parámetro | Uniform | Valor Defecto   |
+| :---- | :---- | :---- |
+| Magnitud Shock | shockStrength | 14.0 |
+| Radio de Corte | shockRadius | 3.0 |
+
+* **Decisión de diseño:** shockActive utiliza una función de temporización en JS de 300 ms con corte discontinuo (step), generando un frente de onda expansivo acotado desde la posición del cursor.  
+* **Predicción:** Expulsión violenta instantánea de las partículas situadas dentro del radio de alcance del atractor.
+
+### **Fuerza 7 · Atracción a Figuras Vectoriales — Teclas 1, 2, 3**
+
+F\_shape \= (targetPosition \- p) · shapeStrength · shapeWeight
+
+| Geometría | Tecla | Ecuación de Target / Atractor Paramétrico   |
+| :---- | :---- | :---- |
+| **Óvalo** | 1 | (cos(t)·r·1.6·jitter, sin(t)·r·0.9·jitter, 0\) |
+| **Cardiograma** | 2 | Superposición de 5 pulsos triangulares (P, Q, R, S, T) sobre el eje X. |
+| **Espiral** | 3 | (sqrt(t)·r·cos(turns·t), sqrt(t)·r·sin(turns·t), 0\) |
+
+## **4\. Registro de pruebas**
+
+| \# | Escenario / Prueba | Fuerzas Activas | Condición Inicial | Predicción Teórica | Observación Empírica | Estado   |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| 1 | **Inercia** | Ninguna (Drag \= 0\) | Velocidad inicial \= 0.8 | La velocidad conservará su dirección y magnitud sin aceleración. | Las partículas atraviesan el volumen manteniendo trayectoria rectilínea continua. | ✔ COMPLETO |
+| 2 | **Ola (Wave)** | Ola (Tecla 4\) | Partículas en reposo | Aparición de frentes sinusoidales con desplazamiento transversal. | Formación de crestas elípticas ordenadas desplazándose a lo largo del eje X. | ✔ COMPLETO |
+| 3 | **Enjambre (Wander)** | Enjambre (Tecla 5\) | Partículas dispersas | Atracción hacia un centro móvil combinado con rotación tangencial. | Agrupamiento denso en forma de vórtice que sigue la curva Lissajous de wanderPoint. | ✔ COMPLETO |
+| 4 | **Expansión (Pulse)** | Expansión (Tecla E) | Partículas agrupadas | Estallido radial expansivo con decaimiento exponencial 0.93/frame. | Aumento súbito de rapidez y coloración naranja/caliente, seguido de estabilización por drag. | ✔ COMPLETO |
+| 5 | **Turbulencia** | Turbulencia (Tecla T) | Partículas ordenadas | Agitación caótica pseudoaleatoria sin dirección neta preferente. | Dispersión homogénea instantánea con textura fluida de agitación. | ✔ COMPLETO |
+| 6 | **Shock** | Shock (Tecla G) | Partículas sobre atractor | Desplazamiento radial exterior instantáneo acotado a shockRadius \= 3.0. | Aparición de un cavidad circular limpia alrededor del mouse que se cierra tras 300 ms. | ✔ COMPLETO |
+| 7 | **Figuras Vectoriales** | Figura (Teclas 1, 2 o 3\) | Partículas caóticas | Convergencia de las partículas hacia los contornos paramétricos definidos. | Estructuración rápida en contornos continuos de óvalo, pulso ECG o espiral. | ✔ COMPLETO |
+
+## **5\. Score visual de LesAlpx**
+
+Estructura de interpretación musical para la pieza *LesAlpx* de Floating Points:
+
+| Tramo Temporal | Elemento Musical Escuchado | Intención Expresiva | Gesto / Controles | Comportamiento Emergente   |
+| :---- | :---- | :---- | :---- | :---- |
+| 0:00 – 0:45 | Sintetizador pulsante inicial y bajo sutil. | Organización geométrica progresiva. | Tecla 1 (Óvalo) \+ movimiento suave de atractor. | Convergencia fluida en un anillo oscilante que responde al puntero. |
+| 0:45 – 1:30 | Entrada del patrón rítmico principal. | Introducción de oleaje y pulso orgánico. | Tecla 4 (Ola) \+ Tecla N (Niebla). | El anillo se deforma en frentes fluidos difusos con textura gaseosa. |
+| 1:30 – 2:15 | Incremento de arpegios y saturación tímbrica. | Acumulación de tensión y dinamismo. | Tecla 5 (Enjambre) \+ Tecla C (Cambio de color). | Vórtices densos de alta velocidad con gradiente cromático brillante. |
+| 2:15 – 2:40 | Crescendo acelerado hacia el clímax. | Agitación y ruptura estructural. | Mantener T (Turbulencia) \+ Pulsos repetidos E. | Estallidos expansivos caóticos con dispersión por todo el canvas. |
+| 2:40 – 3:30 | Drop principal de la canción (Impacto potente). | Impactos rítmicos secos sincronizados. | Golpes secos con tecla G (Shock) sobre los percusivos. | Cavidades circulares instantáneas que expulsan la materia hacia los bordes. |
+| 3:30 – 4:15 | Desarrollo melódico complejo. | Reorganización estructural orgánica. | Tecla 2 (Cardiograma) y Tecla 3 (Espiral). | Transformación de la masa caótica en oscilograma de picos de pulso. |
+| 4:15 – Fin | Decaimiento y resolución de la pieza. | Relajación y disipación progresiva. | Desactivar fuerzas \+ Tecla R al silencio final. | Frenado por drag hasta el reposo total y reinicio del sistema. |
+
+## **6\. Bitácora de IA**
+
+### **Ciclo 1: Implementación de Figuras Vectoriales Paramétricas**
+
+* **Prompt enviado:** "Requiero reemplazar la fuerza radial básica por atracciones a contornos vectoriales (Óvalo, Cardiograma ECG y Espiral) que se puedan activar en tiempo real con las teclas 1, 2 y 3."  
+* **Aceptado:** La formulación matemática de las ecuaciones paramétricas en TSL utilizando trianglePulse para armar las crestas P-Q-R-S-T del electrocardiograma.  
+* **Corregido:** La propuesta inicial calculaba el objetivo fuera de los buffers; se reestructuró para ejecutar la mezcla de pesos (shapeTargetBlend) directamente en el kernel GPU dentro de createSimulation.js.
+
+### **Ciclo 2: Calibración del Enjambre Orbitante y Ola**
+
+* **Prompt enviado:** "La ola se ve plana y el enjambre colapsa en el centro. ¿Cómo les doy dinámica de fluido?"  
+* **Aceptado:** Adición de la componente tangencial wanderOrbitStrength (producto cruz con vector Z) para generar rotación orbital.  
+* **Corregido:** Se ajustó waveFrequency de 0.6 a 1.4 y se añadió la componente cosinusoidal horizontal en cuadratura para lograr el movimiento elíptico de ola.
+
+### **Ciclo 3: Ajuste del Renderizado en Modo Niebla**
+
+* **Prompt enviado:** "El modo Niebla hace que los sprites se vean como círculos gigantes superpuestos."  
+* **Aceptado:** Reducción del multiplicador de tamaño (mistSizeMultiplier) a 0.85 y suavizado de bordes con smoothstep(0.15, 0.5, dist) en el shader de opacidad.
+
+## **7\. Autoevaluación ponderada**
+
+| Criterio | Peso (%) | Evidencia Concreta en Bitácora y Código | Valoración (0-5)   |
+| :---- | :---- | :---- | :---- |
+| **Trazabilidad y comprensión del sistema** | 25 | Mapa del sistema completo (§2) con desglose de VRAM, paso a paso del Compute Shader, asignación de uniforms y renderizado TSL. | 4.2 |
+| **Verificación del algoritmo de fuerzas** | 25 | Tabla del registro de pruebas (§4) con las 7 experiencias verificadas y validadas contra las predicciones teóricas. | 4.6 |
+| **Diseño de fuerzas e intención** | 20 | Ficha de fuerzas (§3) detallando la matemática de las 7 fuerzas emergentes, impulsivas y estocásticas implementadas. | 4.5 |
+| **Instrumento, score e interpretación** | 15 | Score visual (§5) mapeado minuciosamente contra los bloques temporales y dinámicos de la obra *LesAlpx*. | 4.2 |
+| **Experimentación y criterio frente a la IA** | 10 | Registro de la Bitácora de IA (§6) detallando las decisiones de diseño, prompts clave y correcciones de código GPU. | 4.4 |
+| **Entrega técnica y documentación** | 5 | Publicación funcional en GitHub Pages sin errores de consola, contrato técnico WebGPU cumplido y bitácora estructurada. | 4.6 |
+| **Total Puntos** | **100** | **Evaluación global sustentada del instrumento funcional** | **4.4** |
 
