@@ -339,8 +339,18 @@ que el encargo pide poder demostrar interactuando con el sistema.
 
 1. Leí y verifiqué que mi proyecto cumple con los requisitos mínimos de la unidad: 25 puntos.
 
+- 5
+
 2. Puedo explicar claramente qué representa cada variable del modelo de Kuramoto en mi proyecto: 25 puntos.
+
+- 3.8
 
 3. Puedo explicar claramente cómo las variables del modelo producen el comportamiento observado en mi proyecto: 25 puntos.
 
+- 4
+
 4. Puedo demostrar que mi proyecto cumple con los objetivos establecidos en la unidad: 25 puntos.
+
+- 4.5 
+
+## Total: 4.2
