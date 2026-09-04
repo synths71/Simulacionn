@@ -21,7 +21,7 @@
   #ui {
     position:fixed; left:16px; bottom:16px; color:#cdeaff; font-size:12px;
     background:rgba(10,10,25,0.75); padding:12px 16px; border-radius:10px;
-    display:flex; flex-direction:column; gap:10px; width:230px; z-index:10;
+    display:flex; flex-direction:column; gap:10px; width:240px; z-index:10;
     border: 1px solid rgba(127, 224, 255, 0.2);
   }
   #ui label { display:flex; flex-direction:column; gap:4px; }
@@ -63,23 +63,7 @@
 <div id="estado">r = <span id="rVal">0.00</span> — <span id="estadoTxt">desorden</span></div>
 
 <script>
-// ============================================================
-// PARÁMETROS DEL MODELO DE KURAMOTO
-// dθ_i/dt = ω_i + (K/N) * Σ_j sin(θ_j - θ_i)
-//
-// EXTENSIÓN JUSTIFICADA respecto al modelo base:
-// En vez de que K sea idéntico para todos, cada agente tiene
-// un "multiplicador de personalidad" que escala el K global.
-// K_efectivo_i = K_global * multiplicador_i
-// Esto SIGUE partiendo del K global (el requisito obligatorio),
-// pero permite que la personalidad viva en la ecuación misma.
-// Disidente usa un coeficiente que depende del propio K global:
-// con K bajo/medio es NEGATIVO (se aleja activamente del grupo),
-// pero si K sube lo suficiente, el coeficiente cruza a positivo
-// y termina cediendo y sincronizando también.
-// ============================================================
-
-const N = 12; // 8 mínimos + 4 extra para que se vea más lleno (3 de cada personalidad)
+const N = 12;
 
 const PERSONALIDADES = [
   { nombre: "Errante",  omegaBase: 2.2, mult: 0.35, color: [120, 220, 255], octava: 1 },
@@ -88,42 +72,36 @@ const PERSONALIDADES = [
   { nombre: "Disidente",omegaBase: 1.2, mult: -0.9, color: [255, 90, 160],  octava: 0 },
 ];
 
-// escala pentatónica, para que cualquier combinación de notas suene coherente
 const ESCALA = ["C3","D3","F3","G3","A3","C4","D4","F4","G4","A4","C5","D5"];
 
 let agentes = [];
-let particulasFondo = [];  // campo ambiental de fondo
-let particulasEfectos = []; // SISTEMA DE PARTICULAS REACTIVAS: efervescencia al disparar o perturbar
+let polvoPolvo = [];
+let destellosEfectos = [];
 let kGlobal = 1.0;
-let kObjetivo = 1.0;       // valor que marca el slider
+let kObjetivo = 1.0;
 let rangoOmega = 1.0;
 let rangoOmegaObjetivo = 1.0;
 let reverb, limiter;
 let audioListo = false;
 
-// ============================================================
-// CLASE SISTEMA DE PARTÍCULAS REACTIVAS
-// Partículas dinámicas de vida corta generadas por eventos de fase
-// ============================================================
-class ParticulaEfecto {
-  constructor(x, y, color) {
+// Partículas visibles de impacto / disparo
+class Destello {
+  constructor(x, y, col) {
     this.pos = createVector(x, y);
-    this.vel = p5.Vector.random2D().mult(random(1, 3.5)); // velocidad radial
-    this.life = 255;                                      // vida/opacidad inicial
-    this.color = color;
-    this.size = random(2, 5);
+    this.vel = p5.Vector.random2D().mult(random(1.5, 4));
+    this.vida = 255;
+    this.col = col;
+    this.tam = random(3, 6);
   }
-
   actualizar() {
     this.pos.add(this.vel);
-    this.vel.mult(0.94); // rozamiento para desacelerar suavemente
-    this.life -= 7;      // decaimiento gradual de vida
+    this.vel.mult(0.92);
+    this.vida -= 7;
   }
-
   dibujar() {
     noStroke();
-    fill(this.color[0], this.color[1], this.color[2], this.life);
-    ellipse(this.pos.x, this.pos.y, this.size);
+    fill(this.col[0], this.col[1], this.col[2], this.vida);
+    ellipse(this.pos.x, this.pos.y, this.tam);
   }
 }
 
@@ -131,14 +109,14 @@ class Agente {
   constructor(i, personalidad) {
     this.i = i;
     this.p = personalidad;
-    this.theta = random(TWO_PI);       // fase inicial aleatoria -> arrancamos en desorden
+    this.theta = random(TWO_PI);
     this.prevTheta = this.theta;
-    this.pos = createVector(random(width * 0.1, width * 0.9), random(height * 0.1, height * 0.9));
-    this.drift = p5.Vector.random2D().mult(0.15); // deriva estética, NO es parte de Kuramoto
-    this.flash = 0;                     // envolvente visual del pulso (0-1)
-    this.resistenciaPerturbacion = 1.0;  // 1 = normal; baja al perturbar y se recupera poco a poco
-    this.tasaRecuperacion = personalidad.nombre === "Rebelde" ? 0.0004 : 0.0015;
-    this.faseIdle = random(TWO_PI);      // para que el "respiro" de cada una sea distinto
+    this.pos = createVector(random(width * 0.15, width * 0.85), random(height * 0.15, height * 0.85));
+    this.drift = p5.Vector.random2D().mult(0.15);
+    this.flash = 0;
+    this.resistenciaPerturbacion = 1.0;
+    this.tasaRecuperacion = personalidad.nombre === "Rebelde" ? 0.0001 : 0.0004; // Recuperación más lenta
+    this.faseIdle = random(TWO_PI);
     this.synth = new Tone.Synth({
       oscillator: { type: personalidad.nombre === "Ancla" ? "sine" : "triangle" },
       envelope: { attack: 0.01, decay: 0.25, sustain: 0.05, release: 0.4 }
@@ -147,25 +125,16 @@ class Agente {
   }
 
   omega() {
-    // el rango de omega es la 2da variable intervenible: escala la dispersión
-    // de frecuencias naturales alrededor de una media común
     const media = 1.2;
     return media + (this.p.omegaBase - media) * rangoOmega;
   }
 
   kEfectiva() {
-    let base;
-    if (this.p.nombre === "Disidente") {
-      // con K bajo, negativo (se aleja) -> con K alto, cruza a positivo (cede y se une)
-      base = -1.3 + 0.6 * kGlobal;
-    } else {
-      base = kGlobal * this.p.mult;
-    }
-    return base * this.resistenciaPerturbacion; // cualquier agente perturbado se "desconecta" un rato
+    let base = (this.p.nombre === "Disidente") ? (-1.3 + 0.6 * kGlobal) : (kGlobal * this.p.mult);
+    return base * this.resistenciaPerturbacion;
   }
 
   actualizar(dt) {
-    // --- núcleo Kuramoto ---
     let suma = 0;
     for (let otro of agentes) {
       if (otro === this) continue;
@@ -176,35 +145,26 @@ class Agente {
     this.theta = (this.theta + dtheta * dt) % TWO_PI;
     if (this.theta < 0) this.theta += TWO_PI;
 
-    // recuperación lenta tras ser perturbada (cada personalidad a su propio ritmo)
     if (this.resistenciaPerturbacion < 1) {
-      this.resistenciaPerturbacion += this.tasaRecuperacion;
-      this.resistenciaPerturbacion = min(this.resistenciaPerturbacion, 1);
+      this.resistenciaPerturbacion = min(this.resistenciaPerturbacion + this.tasaRecuperacion, 1);
     }
 
-    // detectar cruce de fase (theta pasa por 0) -> disparo visual + sonoro
     if (this.prevTheta > TWO_PI * 0.85 && this.theta < TWO_PI * 0.15) {
       this.disparar();
     }
 
-    this.flash *= 0.9; // decaimiento del pulso visual
+    this.flash *= 0.9;
 
-    // deriva estética (posición) - puramente decorativo, no es Kuramoto
     this.pos.add(this.drift);
-    if (this.pos.x < 30 || this.pos.x > width - 30) this.drift.x *= -1;
-    if (this.pos.y < 30 || this.pos.y > height - 30) this.drift.y *= -1;
-    this.pos.x = constrain(this.pos.x, 30, width - 30);
-    this.pos.y = constrain(this.pos.y, 30, height - 30);
+    if (this.pos.x < 40 || this.pos.x > width - 40) this.drift.x *= -1;
+    if (this.pos.y < 40 || this.pos.y > height - 40) this.drift.y *= -1;
   }
 
   disparar() {
     this.flash = 1;
-
-    // NUEVO: Generar ráfaga de partículas al cruzar la fase (visibilidad clara del evento)
-    for (let n = 0; n < 6; n++) {
-      particulasEfectos.push(new ParticulaEfecto(this.pos.x, this.pos.y, this.p.color));
+    for (let n = 0; n < 8; n++) {
+      destellosEfectos.push(new Destello(this.pos.x, this.pos.y, this.p.color));
     }
-
     if (audioListo) {
       const nota = ESCALA[(this.i + this.p.octava * 3 + ESCALA.length) % ESCALA.length];
       this.synth.triggerAttackRelease(nota, "8n");
@@ -212,35 +172,31 @@ class Agente {
   }
 
   perturbar() {
-    this.theta = (this.theta + random(PI * 0.8, PI * 1.2)) % TWO_PI; // empujón fuerte, casi anti-fase
-    this.flash = 0.8;
-    this.resistenciaPerturbacion = this.p.nombre === "Rebelde" ? 0.04 : 0.1;
-
-    // NUEVO: Explosión blanca de partículas al perturbar manualmente el agente
-    for (let n = 0; n < 14; n++) {
-      particulasEfectos.push(new ParticulaEfecto(this.pos.x, this.pos.y, [255, 255, 255]));
+    this.theta = (this.theta + random(PI * 0.8, PI * 1.2)) % TWO_PI;
+    this.flash = 1.0;
+    this.resistenciaPerturbacion = 0.01; // Desconexión fuerte tras clic
+    for (let n = 0; n < 20; n++) {
+      destellosEfectos.push(new Destello(this.pos.x, this.pos.y, [255, 255, 255]));
     }
   }
 
   dibujar() {
     const [r, g, b] = this.p.color;
-    // respiro idle: leve pulso continuo aunque no haya disparado, para que nunca se vea muerta
     const idle = 0.5 + 0.5 * sin(frameCount * 0.025 + this.faseIdle);
-    const tam = 8 + idle * 4 + this.flash * 18;
+    const tam = 9 + idle * 4 + this.flash * 20;
     
     noStroke();
-    for (let radio = tam * 3.8; radio > 0; radio -= 2.2) {
-      const alpha = map(radio, 0, tam * 3.8, 60, 0) * (0.2 + idle * 0.25 + this.flash * 0.75);
+    for (let radio = tam * 3.8; radio > 0; radio -= 3) {
+      const alpha = map(radio, 0, tam * 3.8, 80, 0) * (0.3 + idle * 0.2 + this.flash * 0.8);
       fill(r, g, b, alpha);
       ellipse(this.pos.x, this.pos.y, radio);
     }
-    fill(255, 255, 255, 150 + idle * 40 + this.flash * 65);
-    ellipse(this.pos.x, this.pos.y, tam * 0.45);
+    fill(255, 255, 255, 220 + this.flash * 35);
+    ellipse(this.pos.x, this.pos.y, tam * 0.5);
   }
 }
 
 function ordenParametro() {
-  // r = |promedio de e^{i*theta_j}| -> mide qué tan sincronizado está el sistema
   let sumX = 0, sumY = 0;
   for (let a of agentes) { sumX += cos(a.theta); sumY += sin(a.theta); }
   return dist(0, 0, sumX / N, sumY / N);
@@ -252,16 +208,15 @@ function setup() {
   limiter = new Tone.Limiter(-3).toDestination();
 
   for (let i = 0; i < N; i++) {
-    const personalidad = PERSONALIDADES[i % PERSONALIDADES.length];
-    agentes.push(new Agente(i, personalidad));
+    agentes.push(new Agente(i, PERSONALIDADES[i % PERSONALIDADES.length]));
   }
 
-  // Creación del campo de partículas de fondo
+  // Partículas de fondo bien visibles
   for (let i = 0; i < 180; i++) {
-    particulasFondo.push({
+    polvoPolvo.push({
       x: random(width), y: random(height),
-      vx: random(-0.1, 0.1), vy: random(-0.1, 0.1),
-      tam: random(1.2, 2.5),
+      vx: random(-0.25, 0.25), vy: random(-0.25, 0.25),
+      tam: random(2.5, 4.5),
       fase: random(TWO_PI)
     });
   }
@@ -271,45 +226,39 @@ function setup() {
 
 function draw() {
   const r = ordenParametro();
-
-  // el fondo comunica el estado colectivo (requisito: forma perceptible de estado)
   const brillo = map(r, 0, 1, 8, 30);
-  background(5 + brillo * 0.3, 5 + brillo * 0.2, 16 + brillo * 0.6, 75);
+  background(5 + brillo * 0.3, 5 + brillo * 0.2, 16 + brillo * 0.6, 90);
 
-  // easing: K y omega se deslizan hacia el valor del slider MUY gradual (~30s), no de golpe
   kGlobal += (kObjetivo - kGlobal) * 0.0015;
   rangoOmega += (rangoOmegaObjetivo - rangoOmega) * 0.0015;
 
-  // NUEVO: Campo de partículas de fondo REACTIVO al parámetro de orden 'r'
+  // Dibujar partículas de fondo (visibles)
   noStroke();
-  for (let p of particulasFondo) {
+  for (let p of polvoPolvo) {
     p.x += p.vx; p.y += p.vy;
     if (p.x < 0) p.x = width; if (p.x > width) p.x = 0;
     if (p.y < 0) p.y = height; if (p.y > height) p.y = 0;
-    
-    // Titileo intensificado por el orden global r
-    const titileo = 50 + (60 * sin(frameCount * 0.03 + p.fase)) * (0.5 + r * 0.5);
-    fill(180, 200, 255, titileo);
+    const alpha = 80 + 70 * sin(frameCount * 0.03 + p.fase);
+    fill(140, 180, 255, alpha);
     ellipse(p.x, p.y, p.tam * (1 + r * 0.4));
   }
 
-  // NUEVO: Actualización y renderizado del sistema de partículas de eventos
-  for (let i = particulasEfectos.length - 1; i >= 0; i--) {
-    let p = particulasEfectos[i];
-    p.actualizar();
-    p.dibujar();
-    if (p.life <= 0) particulasEfectos.splice(i, 1);
+  // Dibujar destellos emergentes
+  for (let i = destellosEfectos.length - 1; i >= 0; i--) {
+    let d = destellosEfectos[i];
+    d.actualizar();
+    d.dibujar();
+    if (d.vida <= 0) destellosEfectos.splice(i, 1);
   }
 
   for (let a of agentes) a.actualizar(0.045);
 
-  // líneas de conexión: TODAS existen siempre (nadie queda flotando sola),
-  // pero su brillo depende de qué tan en fase están los dos agentes
+  // Conexiones de fase
   strokeWeight(1);
   for (let i = 0; i < N; i++) {
     for (let j = i + 1; j < N; j++) {
-      const cercania = (cos(agentes[i].theta - agentes[j].theta) + 1) / 2; // 0..1
-      const alpha = 6 + cercania * cercania * 80; // piso mínimo visible + refuerzo cuando están en fase
+      const cercania = (cos(agentes[i].theta - agentes[j].theta) + 1) / 2;
+      const alpha = 10 + cercania * cercania * 110;
       stroke(150, 200, 255, alpha);
       line(agentes[i].pos.x, agentes[i].pos.y, agentes[j].pos.x, agentes[j].pos.y);
     }
@@ -317,7 +266,6 @@ function draw() {
 
   for (let a of agentes) a.dibujar();
 
-  // panel de estado
   document.getElementById("rVal").textContent = r.toFixed(2);
   let estadoTxt = "desorden";
   if (r > 0.85) estadoTxt = "organización estable";
@@ -336,7 +284,6 @@ function clicEnCanvas() {
 
 function windowResized() { resizeCanvas(windowWidth, windowHeight); }
 
-// ---------- UI ----------
 document.getElementById("kSlider").addEventListener("input", (e) => {
   kObjetivo = parseFloat(e.target.value);
   document.getElementById("kVal").textContent = kObjetivo.toFixed(2);
@@ -346,7 +293,6 @@ document.getElementById("wSlider").addEventListener("input", (e) => {
   document.getElementById("wVal").textContent = rangoOmegaObjetivo.toFixed(2);
 });
 document.getElementById("perturbBtn").addEventListener("click", () => {
-  // perturbación grupal: sacude 3 agentes al azar
   const copia = [...agentes];
   for (let n = 0; n < 3; n++) {
     const idx = floor(random(copia.length));
