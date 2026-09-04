@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Enjambre Kuramoto</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; background:#050510; font-family: 'Courier New', monospace; }
+  #startOverlay {
+    position:fixed; inset:0; background:rgba(3,3,10,0.92); color:#eee;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:20; text-align:center; padding:20px;
+  }
+  #startOverlay button {
+    margin-top:20px; padding:14px 34px; font-size:16px; letter-spacing:1px;
+    background:transparent; border:1px solid #7fe0ff; color:#7fe0ff; cursor:pointer;
+    border-radius:30px; transition: all .2s;
+  }
+  #startOverlay button:hover { background:#7fe0ff; color:#050510; }
+  #ui {
+    position:fixed; left:16px; bottom:16px; color:#cdeaff; font-size:12px;
+    background:rgba(10,10,25,0.55); padding:12px 16px; border-radius:10px;
+    display:flex; flex-direction:column; gap:10px; width:230px; z-index:10;
+  }
+  #ui label { display:flex; flex-direction:column; gap:4px; }
+  #ui input[type=range]{ width:100%; }
+  #ui button {
+    padding:8px; background:#1a1a35; border:1px solid #4a4a7a; color:#cdeaff;
+    border-radius:6px; cursor:pointer;
+  }
+  #ui button:hover { background:#2a2a55; }
+  #estado { position:fixed; top:14px; right:16px; color:#cdeaff; font-size:12px;
+    background:rgba(10,10,25,0.55); padding:8px 14px; border-radius:8px; z-index:10; }
+</style>
+</head>
+<body>
+
+<div id="startOverlay">
+  <h2 style="font-weight:400; letter-spacing:2px;">ENJAMBRE // KURAMOTO</h2>
+  <p style="max-width:420px; opacity:0.8; font-size:13px; line-height:1.5;">
+    Un enjambre de luciérnagas acopladas por el modelo de Kuramoto.<br>
+    Toca el sistema, no solo lo observes.
+  </p>
+  <button id="startBtn">▶ INICIAR</button>
+</div>
+
+<div id="ui">
+  <label>K global (acoplamiento) — <span id="kVal">1.00</span>
+    <input type="range" id="kSlider" min="0" max="3" step="0.01" value="1">
+  </label>
+  <label>Rango de ω (dispersión natural) — <span id="wVal">1.00</span>
+    <input type="range" id="wSlider" min="0" max="2" step="0.01" value="1">
+  </label>
+  <button id="perturbBtn">🌬 Perturbar enjambre</button>
+  <span style="opacity:0.6; font-size:10px; line-height:1.4;">
+    Clic sobre una luciérnaga para perturbarla individualmente.
+  </span>
+</div>
+
+<div id="estado">r = <span id="rVal">0.00</span> — <span id="estadoTxt">desorden</span></div>
+
+<script>
+// ============================================================
+// PARÁMETROS DEL MODELO DE KURAMOTO
+// dθ_i/dt = ω_i + (K/N) * Σ_j sin(θ_j - θ_i)
+//
+// EXTENSIÓN JUSTIFICADA respecto al modelo base:
+// En vez de que K sea idéntico para todos, cada agente tiene
+// un "multiplicador de personalidad" que escala el K global.
+// K_efectivo_i = K_global * multiplicador_i
+// Esto SIGUE partiendo del K global (el requisito obligatorio),
+// pero permite que la personalidad viva en la ecuación misma.
+// Disidente usa un coeficiente que depende del propio K global:
+// con K bajo/medio es NEGATIVO (se aleja activamente del grupo),
+// pero si K sube lo suficiente, el coeficiente cruza a positivo
+// y termina cediendo y sincronizando también.
+// ============================================================
+
+const N = 12; // 8 mínimos + 4 extra para que se vea más lleno (3 de cada personalidad)
+
+const PERSONALIDADES = [
+  { nombre: "Errante",  omegaBase: 2.2, mult: 0.35, color: [120, 220, 255], octava: 1 },
+  { nombre: "Ancla",    omegaBase: 0.55, mult: 1.7,  color: [255, 200, 90],  octava: -1 },
+  { nombre: "Rebelde",  omegaBase: 1.2, mult: 1.0,  color: [160, 255, 170], octava: 0 },
+  { nombre: "Disidente",omegaBase: 1.2, mult: -0.9, color: [255, 90, 160],  octava: 0 },
+];
+
+// escala pentatónica, para que cualquier combinación de notas suene coherente
+const ESCALA = ["C3","D3","F3","G3","A3","C4","D4","F4","G4","A4","C5","D5"];
+
+let agentes = [];
+let kGlobal = 1.0;
+let kObjetivo = 1.0;       // valor que marca el slider
+let rangoOmega = 1.0;
+let rangoOmegaObjetivo = 1.0;
+let reverb, limiter;
+let audioListo = false;
+
+class Agente {
+  constructor(i, personalidad) {
+    this.i = i;
+    this.p = personalidad;
+    this.theta = random(TWO_PI);       // fase inicial aleatoria -> arrancamos en desorden
+    this.prevTheta = this.theta;
+    this.pos = createVector(random(width), random(height));
+    this.drift = p5.Vector.random2D().mult(0.15); // deriva estética, NO es parte de Kuramoto
+    this.flash = 0;                     // envolvente visual del pulso (0-1)
+    this.resistenciaPerturbacion = 1.0;  // 1 = normal; baja tras perturbar a Rebelde y se recupera lento
+    this.synth = new Tone.Synth({
+      oscillator: { type: personalidad.nombre === "Ancla" ? "sine" : "triangle" },
+      envelope: { attack: 0.01, decay: 0.25, sustain: 0.05, release: 0.4 }
+    }).connect(reverb);
+    this.synth.volume.value = -8;
+  }
+
+  omega() {
+    // el rango de omega es la 2da variable intervenible: escala la dispersión
+    // de frecuencias naturales alrededor de una media común
+    const media = 1.2;
+    return media + (this.p.omegaBase - media) * rangoOmega;
+  }
+
+  kEfectiva() {
+    if (this.p.nombre === "Disidente") {
+      // con K bajo, negativo (se aleja) -> con K alto, cruza a positivo (cede y se une)
+      return -1.3 + 0.6 * kGlobal;
+    }
+    let mult = this.p.mult;
+    if (this.p.nombre === "Rebelde") mult *= this.resistenciaPerturbacion;
+    return kGlobal * mult;
+  }
+
+  actualizar(dt) {
+    // --- núcleo Kuramoto ---
+    let suma = 0;
+    for (let otro of agentes) {
+      if (otro === this) continue;
+      suma += sin(otro.theta - this.theta);
+    }
+    const dtheta = this.omega() + (this.kEfectiva() / N) * suma;
+    this.prevTheta = this.theta;
+    this.theta = (this.theta + dtheta * dt) % TWO_PI;
+    if (this.theta < 0) this.theta += TWO_PI;
+
+    // recuperación lenta de Rebelde tras ser perturbada
+    if (this.resistenciaPerturbacion < 1) {
+      this.resistenciaPerturbacion += 0.003;
+      this.resistenciaPerturbacion = min(this.resistenciaPerturbacion, 1);
+    }
+
+    // detectar cruce de fase (theta pasa por 0) -> disparo visual + sonoro
+    if (this.prevTheta > TWO_PI * 0.85 && this.theta < TWO_PI * 0.15) {
+      this.disparar();
+    }
+
+    this.flash *= 0.9; // decaimiento del pulso visual
+
+    // deriva estética (posición) - puramente decorativo, no es Kuramoto
+    this.pos.add(this.drift);
+    if (this.pos.x < 20 || this.pos.x > width - 20) this.drift.x *= -1;
+    if (this.pos.y < 20 || this.pos.y > height - 20) this.drift.y *= -1;
+    this.pos.x = constrain(this.pos.x, 20, width - 20);
+    this.pos.y = constrain(this.pos.y, 20, height - 20);
+  }
+
+  disparar() {
+    this.flash = 1;
+    if (audioListo) {
+      const nota = ESCALA[(this.i + this.p.octava * 3 + ESCALA.length) % ESCALA.length];
+      this.synth.triggerAttackRelease(nota, "8n");
+    }
+  }
+
+  perturbar() {
+    this.theta = (this.theta + random(PI * 0.6, PI * 1.4)) % TWO_PI;
+    this.flash = 0.6;
+    if (this.p.nombre === "Rebelde") this.resistenciaPerturbacion = 0.15;
+  }
+
+  dibujar() {
+    const [r, g, b] = this.p.color;
+    const tam = 8 + this.flash * 14; // más chica que antes
+    noStroke();
+    for (let radio = tam * 3.6; radio > 0; radio -= 2.5) { // radio de glow más grande, pasos más finos = más difuso
+      const alpha = map(radio, 0, tam * 3.6, 55, 0) * (0.25 + this.flash * 0.75);
+      fill(r, g, b, alpha);
+      ellipse(this.pos.x, this.pos.y, radio);
+    }
+    fill(255, 255, 255, 180 + this.flash * 60);
+    ellipse(this.pos.x, this.pos.y, tam * 0.4);
+  }
+}
+
+function ordenParametro() {
+  // r = |promedio de e^{i*theta_j}| -> mide qué tan sincronizado está el sistema
+  let sumX = 0, sumY = 0;
+  for (let a of agentes) { sumX += cos(a.theta); sumY += sin(a.theta); }
+  return dist(0, 0, sumX / N, sumY / N);
+}
+
+function setup() {
+  const cnv = createCanvas(windowWidth, windowHeight);
+  reverb = new Tone.Reverb({ decay: 3, wet: 0.35 }).toDestination();
+  limiter = new Tone.Limiter(-3).toDestination();
+
+  for (let i = 0; i < N; i++) {
+    const personalidad = PERSONALIDADES[i % PERSONALIDADES.length];
+    agentes.push(new Agente(i, personalidad));
+  }
+
+  cnv.mousePressed(clicEnCanvas);
+}
+
+function draw() {
+  const r = ordenParametro();
+
+  // el fondo comunica el estado colectivo (requisito: forma perceptible de estado)
+  const brillo = map(r, 0, 1, 8, 30);
+  background(5 + brillo * 0.3, 5 + brillo * 0.2, 16 + brillo * 0.6, 60);
+
+  // easing: K y omega se deslizan hacia el valor del slider en vez de saltar de golpe
+  kGlobal += (kObjetivo - kGlobal) * 0.01;
+  rangoOmega += (rangoOmegaObjetivo - rangoOmega) * 0.01;
+
+  for (let a of agentes) a.actualizar(0.045);
+
+  // líneas de conexión: TODAS existen siempre (nadie queda flotando sola),
+  // pero su brillo depende de qué tan en fase están los dos agentes
+  strokeWeight(1);
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      const cercania = (cos(agentes[i].theta - agentes[j].theta) + 1) / 2; // 0..1
+      const alpha = 4 + cercania * cercania * 65; // piso mínimo visible + refuerzo cuando están en fase
+      stroke(150, 200, 255, alpha);
+      line(agentes[i].pos.x, agentes[i].pos.y, agentes[j].pos.x, agentes[j].pos.y);
+    }
+  }
+
+  for (let a of agentes) a.dibujar();
+
+  // panel de estado
+  document.getElementById("rVal").textContent = r.toFixed(2);
+  let estadoTxt = "desorden";
+  if (r > 0.85) estadoTxt = "organización estable";
+  else if (r > 0.4) estadoTxt = "organización parcial";
+  document.getElementById("estadoTxt").textContent = estadoTxt;
+}
+
+function clicEnCanvas() {
+  for (let a of agentes) {
+    if (dist(mouseX, mouseY, a.pos.x, a.pos.y) < 40) {
+      a.perturbar();
+      break;
+    }
+  }
+}
+
+function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+
+// ---------- UI ----------
+document.getElementById("kSlider").addEventListener("input", (e) => {
+  kObjetivo = parseFloat(e.target.value);
+  document.getElementById("kVal").textContent = kObjetivo.toFixed(2);
+});
+document.getElementById("wSlider").addEventListener("input", (e) => {
+  rangoOmegaObjetivo = parseFloat(e.target.value);
+  document.getElementById("wVal").textContent = rangoOmegaObjetivo.toFixed(2);
+});
+document.getElementById("perturbBtn").addEventListener("click", () => {
+  // perturbación grupal: sacude 3 agentes al azar
+  const copia = [...agentes];
+  for (let n = 0; n < 3; n++) {
+    const idx = floor(random(copia.length));
+    copia[idx].perturbar();
+    copia.splice(idx, 1);
+  }
+});
+document.getElementById("startBtn").addEventListener("click", async () => {
+  await Tone.start();
+  audioListo = true;
+  document.getElementById("startOverlay").style.display = "none";
+});
+</script>
+</body>
+</html>
