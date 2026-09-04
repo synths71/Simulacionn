@@ -83,10 +83,11 @@ const N = 12; // Cantidad total de agentes (osciladores)
 
 // Personalidades que extienden el comportamiento base de Kuramoto
 const PERSONALIDADES = [
-  { nombre: "Errante",  omegaBase: 2.2, mult: 0.35, color: [120, 220, 255], octava: 1 },
-  { nombre: "Ancla",    omegaBase: 0.55, mult: 1.7,  color: [255, 200, 90],  octava: -1 },
-  { nombre: "Rebelde",  omegaBase: 1.2, mult: 1.0,  color: [160, 255, 170], octava: 0 },
-  { nombre: "Disidente",omegaBase: 1.2, mult: -0.9, color: [255, 90, 160],  octava: 0 },
+  // "onda" = tipo de oscilador de Tone.js: define el TIMBRE (no la nota) de cada personalidad
+  { nombre: "Errante",  omegaBase: 2.2, mult: 0.35, color: [120, 220, 255], octava: 1,  onda: "triangle" },
+  { nombre: "Ancla",    omegaBase: 0.55, mult: 1.7,  color: [255, 200, 90],  octava: -1, onda: "sine" },
+  { nombre: "Rebelde",  omegaBase: 1.2, mult: 1.0,  color: [160, 255, 170], octava: 0,  onda: "square" },
+  { nombre: "Disidente",omegaBase: 1.2, mult: -0.9, color: [255, 90, 160],  octava: 0,  onda: "sawtooth" },
 ];
 
 // Escala pentatónica para los disparos sonoros
@@ -150,8 +151,9 @@ class Agente {
     this.faseIdle = random(TWO_PI);
     
     // Configuración del sintetizador individual (Tone.js)
+    // VARIABLE DE TIMBRE: cada personalidad usa su propio tipo de oscilador (this.p.onda)
     this.synth = new Tone.Synth({
-      oscillator: { type: personalidad.nombre === "Ancla" ? "sine" : "triangle" },
+      oscillator: { type: this.p.onda },
       envelope: { attack: 0.01, decay: 0.25, sustain: 0.05, release: 0.4 }
     }).connect(reverb);
     this.synth.volume.value = -8;
