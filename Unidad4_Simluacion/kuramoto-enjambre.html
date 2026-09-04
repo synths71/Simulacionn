@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 <style>
   html, body { margin:0; padding:0; overflow:hidden; background:#050510; font-family: 'Courier New', monospace; }
+  
+  /* OVERLAY INICIAL: Permite activar el contexto de audio del navegador al dar clic */
   #startOverlay {
     position:fixed; inset:0; background:rgba(3,3,10,0.92); color:#eee;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -18,6 +20,8 @@
     border-radius:30px; transition: all .2s;
   }
   #startOverlay button:hover { background:#7fe0ff; color:#050510; }
+  
+  /* INTERFAZ DE USUARIO (UI): Sliders para manipular el modelo */
   #ui {
     position:fixed; left:16px; bottom:16px; color:#cdeaff; font-size:12px;
     background:rgba(10,10,25,0.75); padding:12px 16px; border-radius:10px;
@@ -31,9 +35,13 @@
     border-radius:6px; cursor:pointer;
   }
   #ui button:hover { background:#2a2a55; }
-  #estado { position:fixed; top:14px; right:16px; color:#cdeaff; font-size:12px;
+  
+  /* PANEL DE ESTADO: Muestra el parámetro de orden 'r' */
+  #estado { 
+    position:fixed; top:14px; right:16px; color:#cdeaff; font-size:12px;
     background:rgba(10,10,25,0.75); padding:8px 14px; border-radius:8px; z-index:10;
-    border: 1px solid rgba(127, 224, 255, 0.2); }
+    border: 1px solid rgba(127, 224, 255, 0.2); 
+  }
 </style>
 </head>
 <body>
@@ -48,23 +56,32 @@
 </div>
 
 <div id="ui">
+  <!-- VARIABLE KURAMOTO: K (Fuerza de acoplamiento global) -->
   <label>K global (acoplamiento) — <span id="kVal">1.00</span>
     <input type="range" id="kSlider" min="0" max="3" step="0.01" value="1">
   </label>
+  
+  <!-- VARIABLE KURAMOTO: Dispersión de omega (frecuencias naturales) -->
   <label>Rango de ω (dispersión natural) — <span id="wVal">1.00</span>
     <input type="range" id="wSlider" min="0" max="2" step="0.01" value="1">
   </label>
+  
   <button id="perturbBtn">🌬 Perturbar enjambre</button>
   <span style="opacity:0.6; font-size:10px; line-height:1.4;">
     Clic sobre una luciérnaga para perturbarla individualmente.
   </span>
 </div>
 
+<!-- MEDIDOR DE SINCRONIZACIÓN: Muestra 'r' en tiempo real -->
 <div id="estado">r = <span id="rVal">0.00</span> — <span id="estadoTxt">desorden</span></div>
 
 <script>
-const N = 12;
+// ============================================================================
+// 1. VARIABLES INICIALES Y PARÁMETROS DE LOS AGENTES
+// ============================================================================
+const N = 12; // Cantidad total de agentes (osciladores)
 
+// Personalidades que extienden el comportamiento base de Kuramoto
 const PERSONALIDADES = [
   { nombre: "Errante",  omegaBase: 2.2, mult: 0.35, color: [120, 220, 255], octava: 1 },
   { nombre: "Ancla",    omegaBase: 0.55, mult: 1.7,  color: [255, 200, 90],  octava: -1 },
@@ -72,19 +89,25 @@ const PERSONALIDADES = [
   { nombre: "Disidente",omegaBase: 1.2, mult: -0.9, color: [255, 90, 160],  octava: 0 },
 ];
 
+// Escala pentatónica para los disparos sonoros
 const ESCALA = ["C3","D3","F3","G3","A3","C4","D4","F4","G4","A4","C5","D5"];
 
 let agentes = [];
 let polvoPolvo = [];
 let destellosEfectos = [];
-let kGlobal = 1.0;
-let kObjetivo = 1.0;
-let rangoOmega = 1.0;
+
+// Variables globales interactivas del modelo
+let kGlobal = 1.0;            // Acoplamiento K actual
+let kObjetivo = 1.0;          // Meta de K (transición suave)
+let rangoOmega = 1.0;         // Dispersión actual de frecuencias
 let rangoOmegaObjetivo = 1.0;
+
 let reverb, limiter;
 let audioListo = false;
 
-// Partículas visibles de impacto / disparo
+// ============================================================================
+// 2. SISTEMA DE PARTÍCULAS REACTIVAS (EFECTO VISUAL DE DISPARO)
+// ============================================================================
 class Destello {
   constructor(x, y, col) {
     this.pos = createVector(x, y);
@@ -105,18 +128,28 @@ class Destello {
   }
 }
 
+// ============================================================================
+// 3. CLASE AGENTE: MODELO MATEMÁTICO DE KURAMOTO
+// ============================================================================
 class Agente {
   constructor(i, personalidad) {
     this.i = i;
     this.p = personalidad;
+    
+    // VARIABLE KURAMOTO: theta_i (Fase inicial aleatoria entre 0 y 2*PI)
     this.theta = random(TWO_PI);
     this.prevTheta = this.theta;
+    
+    // Posicionamiento 2D y deriva visual
     this.pos = createVector(random(width * 0.15, width * 0.85), random(height * 0.15, height * 0.85));
     this.drift = p5.Vector.random2D().mult(0.15);
     this.flash = 0;
+    
     this.resistenciaPerturbacion = 1.0;
     this.tasaRecuperacion = personalidad.nombre === "Rebelde" ? 0.0001 : 0.0004; // Recuperación más lenta
     this.faseIdle = random(TWO_PI);
+    
+    // Configuración del sintetizador individual (Tone.js)
     this.synth = new Tone.Synth({
       oscillator: { type: personalidad.nombre === "Ancla" ? "sine" : "triangle" },
       envelope: { attack: 0.01, decay: 0.25, sustain: 0.05, release: 0.4 }
@@ -124,37 +157,51 @@ class Agente {
     this.synth.volume.value = -8;
   }
 
+  // VARIABLE KURAMOTO: omega_i (Frecuencia natural de oscilación)
   omega() {
     const media = 1.2;
     return media + (this.p.omegaBase - media) * rangoOmega;
   }
 
+  // VARIABLE KURAMOTO: K_efectiva (Acoplamiento de este agente según su personalidad)
   kEfectiva() {
     let base = (this.p.nombre === "Disidente") ? (-1.3 + 0.6 * kGlobal) : (kGlobal * this.p.mult);
     return base * this.resistenciaPerturbacion;
   }
 
+  // --------------------------------------------------------------------------
+  // ECUACIÓN DIFERENCIAL DE KURAMOTO
+  // d(theta_i)/dt = omega_i + (K/N) * SUMA( sin(theta_j - theta_i) )
+  // --------------------------------------------------------------------------
   actualizar(dt) {
     let suma = 0;
+    // Interacción con los demás osciladores
     for (let otro of agentes) {
       if (otro === this) continue;
+      // Término sin(theta_j - theta_i)
       suma += sin(otro.theta - this.theta);
     }
+    
+    // Integración Euler: calcula el cambio de fase dtheta
     const dtheta = this.omega() + (this.kEfectiva() / N) * suma;
+    
     this.prevTheta = this.theta;
-    this.theta = (this.theta + dtheta * dt) % TWO_PI;
+    this.theta = (this.theta + dtheta * dt) % TWO_PI; // Avance de fase acotado
     if (this.theta < 0) this.theta += TWO_PI;
 
+    // Recuperación paulatina tras perturbación
     if (this.resistenciaPerturbacion < 1) {
       this.resistenciaPerturbacion = min(this.resistenciaPerturbacion + this.tasaRecuperacion, 1);
     }
 
+    // DISPARO DE FASE: Se activa cuando completa un ciclo (pasa por 0)
     if (this.prevTheta > TWO_PI * 0.85 && this.theta < TWO_PI * 0.15) {
       this.disparar();
     }
 
     this.flash *= 0.9;
 
+    // Deriva estética de posición 2D
     this.pos.add(this.drift);
     if (this.pos.x < 40 || this.pos.x > width - 40) this.drift.x *= -1;
     if (this.pos.y < 40 || this.pos.y > height - 40) this.drift.y *= -1;
@@ -162,9 +209,11 @@ class Agente {
 
   disparar() {
     this.flash = 1;
+    // Partículas emergentes
     for (let n = 0; n < 8; n++) {
       destellosEfectos.push(new Destello(this.pos.x, this.pos.y, this.p.color));
     }
+    // Disparo de audio
     if (audioListo) {
       const nota = ESCALA[(this.i + this.p.octava * 3 + ESCALA.length) % ESCALA.length];
       this.synth.triggerAttackRelease(nota, "8n");
@@ -172,6 +221,7 @@ class Agente {
   }
 
   perturbar() {
+    // Ruptura abrupta de fase por interacción
     this.theta = (this.theta + random(PI * 0.8, PI * 1.2)) % TWO_PI;
     this.flash = 1.0;
     this.resistenciaPerturbacion = 0.01; // Desconexión fuerte tras clic
@@ -196,12 +246,23 @@ class Agente {
   }
 }
 
+// ============================================================================
+// 4. PARÁMETRO DE ORDEN DE KURAMOTO (r)
+// r = (1/N) * | SUMA( e^(i * theta_j) ) |
+// Mide la sincronización colectiva: 0 (desorden) a 1 (sincronía total)
+// ============================================================================
 function ordenParametro() {
   let sumX = 0, sumY = 0;
-  for (let a of agentes) { sumX += cos(a.theta); sumY += sin(a.theta); }
-  return dist(0, 0, sumX / N, sumY / N);
+  for (let a of agentes) { 
+    sumX += cos(a.theta); // Componente X del vector de fase
+    sumY += sin(a.theta); // Componente Y del vector de fase
+  }
+  return dist(0, 0, sumX / N, sumY / N); // Magnitud promedio
 }
 
+// ============================================================================
+// 5. CICLO PRINCIPAL (SETUP & DRAW)
+// ============================================================================
 function setup() {
   const cnv = createCanvas(windowWidth, windowHeight);
   reverb = new Tone.Reverb({ decay: 3, wet: 0.35 }).toDestination();
@@ -225,14 +286,16 @@ function setup() {
 }
 
 function draw() {
+  // Cálculo del parámetro de orden r
   const r = ordenParametro();
   const brillo = map(r, 0, 1, 8, 30);
   background(5 + brillo * 0.3, 5 + brillo * 0.2, 16 + brillo * 0.6, 90);
 
+  // Transición suave de sliders
   kGlobal += (kObjetivo - kGlobal) * 0.0015;
   rangoOmega += (rangoOmegaObjetivo - rangoOmega) * 0.0015;
 
-  // Dibujar partículas de fondo (visibles)
+  // Dibujar partículas de fondo
   noStroke();
   for (let p of polvoPolvo) {
     p.x += p.vx; p.y += p.vy;
@@ -251,9 +314,10 @@ function draw() {
     if (d.vida <= 0) destellosEfectos.splice(i, 1);
   }
 
+  // Actualizar física de Kuramoto
   for (let a of agentes) a.actualizar(0.045);
 
-  // Conexiones de fase
+  // Conexiones de fase entre parejas de osciladores
   strokeWeight(1);
   for (let i = 0; i < N; i++) {
     for (let j = i + 1; j < N; j++) {
@@ -264,8 +328,10 @@ function draw() {
     }
   }
 
+  // Dibujar agentes
   for (let a of agentes) a.dibujar();
 
+  // Actualizar texto en pantalla
   document.getElementById("rVal").textContent = r.toFixed(2);
   let estadoTxt = "desorden";
   if (r > 0.85) estadoTxt = "organización estable";
@@ -284,6 +350,9 @@ function clicEnCanvas() {
 
 function windowResized() { resizeCanvas(windowWidth, windowHeight); }
 
+// ============================================================================
+// 6. EVENTOS DE INTERFAZ
+// ============================================================================
 document.getElementById("kSlider").addEventListener("input", (e) => {
   kObjetivo = parseFloat(e.target.value);
   document.getElementById("kVal").textContent = kObjetivo.toFixed(2);
