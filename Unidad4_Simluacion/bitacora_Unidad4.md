@@ -218,7 +218,81 @@ es la descripción técnica objetiva de lo que hace el código; la intención de
 
 ---
 
-## 5. Respuestas a las preguntas centrales del encargo de diseño
+## 5. Fórmula del modelo: clásica vs. modificada
+
+**Fórmula original de Kuramoto (la de referencia):**
+
+$$\frac{d\theta_i}{dt} = \omega_i + \frac{K}{N}\sum_{j=1}^{N} \sin(\theta_j - \theta_i)$$
+
+**Fórmula que realmente usa este sistema:**
+
+$$\frac{d\theta_i}{dt} = \omega_i(t) + \frac{K_i^{\text{eff}}(t)}{N}\sum_{j \neq i} \sin(\theta_j - \theta_i)$$
+
+La diferencia está en dos términos que en el modelo clásico son constantes y aquí son
+variables por agente y en el tiempo:
+
+**ωᵢ(t)** — depende del slider de dispersión:
+
+$$\omega_i(t) = 1.2 + (\omega_{i,\text{base}} - 1.2)\cdot R(t)$$
+
+donde $\omega_{i,\text{base}}$ es la frecuencia propia de la personalidad y $R(t)$ es el
+"Rango de ω" del slider.
+
+**Kᵢ^eff(t)** — la modificación central del proyecto:
+
+$$K_i^{\text{eff}}(t) = \begin{cases} -1.3 + 0.6\,K(t) & \text{si } i \text{ es Disidente} \\ K(t)\cdot m_i & \text{en cualquier otro caso} \end{cases} \;\times\; \rho_i(t)$$
+
+donde:
+- $K(t)$ es el valor del slider global "K global (acoplamiento)",
+- $m_i$ es la ganancia propia de cada personalidad,
+- $\rho_i(t)$ es la "resistencia a perturbación" (1 normalmente, cae a ~0.01 justo después de
+  un clic y se recupera lento con el tiempo).
+
+**En una frase:** es la ecuación de Kuramoto estándar, pero donde K deja de ser una constante
+única y pasa a ser una función Kᵢ que depende de la personalidad de cada agente, de si fue
+perturbado recientemente, y de si es el agente Disidente, que tiene un coeficiente que
+permanece negativo para valores normales del slider.
+
+### 5.1 Leyenda de personalidades (color, ω base y ganancia de K)
+
+| Personalidad | Color | RGB | ω base | Ganancia de K (`mult`) |
+|---|---|---|---|---|
+| Errante | Celeste | `[120, 220, 255]` | 2.2 (la más rápida) | 0.35 (acoplamiento débil) |
+| Ancla | Amarillo/dorado | `[255, 200, 90]` | 0.55 (la más lenta) | 1.7 (acoplamiento fuerte) |
+| Rebelde | Verde | `[160, 255, 170]` | 1.2 (media) | 1.0 (acoplamiento neutro) |
+| Disidente | Rosado/morado | `[255, 90, 160]` | 1.2 (media) | Coeficiente propio: `-1.3 + 0.6·K` (negativo en valores normales) |
+
+---
+
+## 6. Preguntas frecuentes para sustentación
+
+**¿Qué representa K en tu proyecto?**
+→ Cuánto se deja influenciar cada agente por el resto. Lo controla el usuario con el slider,
+pero internamente cada personalidad lo multiplica distinto (Ancla fuerte, Errante débil,
+Disidente negativo).
+
+**¿Por qué el sistema nunca llega a r = 1 estable?**
+→ Porque el Disidente tiene K efectivo negativo: en vez de sincronizarse, activamente se aleja
+de la fase promedio. Es una decisión de diseño para que la experiencia no se "muera" en
+silencio sincronizado.
+
+**¿Qué pasa cuando perturbas un agente?**
+→ Se le rompe la fase de golpe y además se desconecta del acoplamiento un momento
+(`resistenciaPerturbacion` cae a casi 0), y se reintegra gradualmente. Por eso ves a r caer y
+luego recuperarse poco a poco, no de un salto.
+
+**¿Por qué no es solo un secuenciador con un reloj?**
+→ Porque el momento en que cada agente dispara depende, en cada instante, de la fase de los
+otros 11 agentes. Perturbar uno cambia el futuro de todos los demás. Un secuenciador no tiene
+esa propagación — ahí está la diferencia real.
+
+**¿Qué pasa si subo mucho el rango de ω?**
+→ Aumenta la diversidad natural entre agentes, así que K tiene que "trabajar más" para
+sincronizarlos. Es la tensión central del modelo: individualidad (ω) vs. cohesión (K).
+
+---
+
+## 7. Respuestas a las preguntas centrales del encargo de diseño
 
 ### ¿Cómo convertir un modelo de autoorganización en un instrumento audiovisual performativo?
 
