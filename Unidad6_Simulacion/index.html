@@ -1,1 +1,36 @@
-dsds
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Times Are Changing · escuadrilla</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- p5 por CDN (necesita internet). Si quieres offline: baja p5.min.js a lib/ y cambia esta ruta. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+</head>
+<body>
+  <audio id="musica" src="assets/musica.mp3" preload="auto"></audio>
+
+  <div id="inicio">
+    <h1>Times Are Changing</h1>
+    <p>Presiona cualquier tecla para entrar · <b>Enter</b> pone la música</p>
+  </div>
+
+  <div id="ayuda" class="oculto">
+    <div class="titulo">Controles</div>
+    <dl>
+      <dt>W / S</dt><dd>viento: tormenta / calma</dd>
+      <dt>V</dt><dd>ver el campo de flechas</dd>
+      <dt>Enter</dt><dd>música</dd>
+      <dt>F</dt><dd>pantalla completa</dd>
+      <dt>H</dt><dd>mostrar / ocultar</dd>
+    </dl>
+  </div>
+  <div id="aviso"></div>
+
+  <!-- Orden importa: primero el estado, luego los algoritmos, al final el sketch -->
+  <script src="js/state.js"></script>
+  <script src="js/field.js"></script>
+  <script src="js/sketch.js"></script>
+</body>
+</html>
