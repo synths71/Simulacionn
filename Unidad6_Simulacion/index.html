@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Times Are Changing · escuadrilla</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- p5 por CDN (necesita internet). Si quieres offline: baja p5.min.js a lib/ y cambia esta ruta. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 </head>
 <body>
@@ -19,18 +18,39 @@
   <div id="ayuda" class="oculto">
     <div class="titulo">Controles</div>
     <dl>
-      <dt>W / S</dt><dd>viento: tormenta / calma</dd>
-      <dt>V</dt><dd>ver el campo de flechas</dd>
+      <dt>↑ ↓</dt><dd>formación: cerrada / abierta</dd>
+      <dt>Q</dt><dd>sostener: se dispersan · soltar: vuelven</dd>
+      <dt>← →</dt><dd>velocidad de las escuadras</dd>
+      <dt>W S</dt><dd>viento: tormenta / calma</dd>
+      <dt>A D</dt><dd>red de luz: fina / extendida</dd>
+      <dt>Espacio</dt><dd>impulso (el “1” que tú marcas)</dd>
+      <dt>Clic</dt><dd>objetivo en tierra (les dispara)</dd>
+      <dt>E</dt><dd>entra / se retira el escuadrón enemigo</dd>
+      <dt>C</dt><dd>cambiar de color: noche · atardecer · alerta</dd>
       <dt>Enter</dt><dd>música</dd>
-      <dt>F</dt><dd>pantalla completa</dd>
-      <dt>H</dt><dd>mostrar / ocultar</dd>
+      <dt>F · H · V</dt><dd>pantalla completa · ayuda · flechas</dd>
     </dl>
   </div>
   <div id="aviso"></div>
 
-  <!-- Orden importa: primero el estado, luego los algoritmos, al final el sketch -->
   <script src="js/state.js"></script>
   <script src="js/field.js"></script>
+  <script src="js/physarum.js"></script>
+  <script src="js/flock.js"></script>
   <script src="js/sketch.js"></script>
+  <script>
+    // Diagnóstico: si falta un archivo o hay un error, lo muestra en pantalla (así no hay que abrir F12).
+    function avisoError(msg) {
+      const a = document.getElementById('aviso');
+      a.textContent = msg; a.classList.add('visible'); a.style.opacity = 1; a.style.maxWidth = '80vw';
+      a.style.background = 'rgba(120,20,20,0.85)';
+    }
+    const requeridos = { 'p5 (internet o lib/)': typeof p5, 'js/state.js': typeof state, 'js/field.js': typeof FlowField,
+      'js/physarum.js': typeof Physarum, 'js/flock.js': typeof Plane, 'js/sketch.js': typeof setup };
+    for (const [archivo, tipo] of Object.entries(requeridos)) {
+      if (tipo === 'undefined') { avisoError('Falta o no carga: ' + archivo); break; }
+    }
+    window.addEventListener('error', (e) => avisoError('Error: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
+  </script>
 </body>
 </html>
