@@ -2,8 +2,7 @@
 
 https://editor.p5js.org/synths71/sketches/ri5hsJ1ax
 
-**Obra:** simulación en p5.js con agentes, fuerzas, ruido Perlin y un rastro que otros pueden seguir.
-**Link:** _(pegar aquí el link de Fullscreen del editor de p5.js)_
+
 
 ---
 
